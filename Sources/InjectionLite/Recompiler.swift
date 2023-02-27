@@ -42,6 +42,7 @@ class Recompiler {
         try? FileManager.default.removeItem(atPath: objectFile)
         let compiling = popen(command+" -o \(objectFile)", "w")
         guard pclose(compiling) >> 8 == EXIT_SUCCESS else {
+            detail("Processed: "+command)
             log("⚠️ Recompilation failed")
             return nil
         }

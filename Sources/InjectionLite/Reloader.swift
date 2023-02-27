@@ -130,13 +130,19 @@ class Reloader {
             MemoryLayout<SIMP>.size
         withUnsafeMutablePointer(
             to: &existingClass.pointee.IVarDestroyer) { to in
-            withUnsafePointer(
+                withUnsafeMutablePointer(
                 to: &classMetadata.pointee.IVarDestroyer) { from in
                 for slot in 1...slots {
                     let impl = unsafeBitCast(from[slot],
                         to: UnsafeMutableRawPointer.self)
-                    if let info = lastImage[impl],
+                    let lastInfo = lastImage[impl]
+                    if let info = lastInfo ?? DLKit.allImages[impl],
                        Self.injectableSymbol(info.name) {
+                        if lastInfo == nil, let injectedSuper =
+                            interposed[String(cString: info.name)] ?? nil {
+                            from[slot] = unsafeBitCast(injectedSuper,
+                                                       to: SIMP.self)
+                        }
                         to[slot] = from[slot]
                         let symbol = info.name.demangled ??
                             String(cString: info.name)
@@ -174,8 +180,8 @@ class Reloader {
     func interposeSymbols(in image: ImageSymbols) {
         var names = [DLKit.SymbolName]()
         var impls = [UnsafeMutableRawPointer]()
-        for entry in image {
-            guard let value = entry.value, !entry.isDebugging,
+        for entry in image.definitions {
+            guard let value = entry.value,
                   Self.injectableSymbol(entry.name) else { continue }
             let symbol = String(cString: entry.name)
             detail("Interposing \(value) "+(entry.name.demangled ?? symbol))

@@ -16,7 +16,7 @@ import DLKit
 #error("InjectionLite can only be used in the simulator or unsandboxed macOS")
 #endif
 
-let APP_PREFIX = "🔥 ", APP_NAME = "InjectionLight"
+let APP_PREFIX = "🔥 ", APP_NAME = "InjectionLite"
 func log(_ what: Any...) {
     print(APP_PREFIX+what.map {"\($0)"}.joined(separator: " "))
 }

@@ -35,19 +35,24 @@ class LogParser {
                     /usr/bin/grep " -primary-file \(escaped) "; \
                 then echo $log && exit; fi; done
             """
-        detail("Scanner: "+scanner)
 
         let scanning = popen(scanner, "r")
         defer { _ = pclose(scanning) }
         guard var command = scanning?.readLine() else {
-            log("⚠️ No matching command for \(escaped)")
-            return nil;
+            log("Scanner: "+scanner)
+            return nil
         }
 
+        command = makeSinglePrimary(source: source, command)
+        return command
+    }
+
+    func makeSinglePrimary(source: String, _ command: String) -> String {
         let escape2 = source
             .replacingOccurrences(of: #"([ '(){}$&*])"#, with: #"\\$1"#,
                                   options: .regularExpression)
-        command = command
+        return command
+            // Strip out all per-primary file options.
             .replacingOccurrences(of: " -o "+Recompiler.fileNameRegex,
                 with: " ", options: .regularExpression)
             .replacingOccurrences(of:
@@ -56,7 +61,7 @@ class LogParser {
             // save primary source file we are injecting
             .replacingOccurrences(of: " -primary-file "+escape2,
                                   with: " -primary-save "+escape2)
-            // strip -primary-file or all files when -filelist
+            // strip other -primary-file or all files when -filelist
             .replacingOccurrences(of: " -primary-file " +
                                   (command.contains(" -filelist") ?
                                    Recompiler.argumentRegex : ""),
@@ -65,8 +70,5 @@ class LogParser {
             .replacingOccurrences(of: "-primary-save", with: "-primary-file")
             .replacingOccurrences(of:
                 "-frontend-parseable-output ", with: "")
-
-        detail("Processed: "+command)
-        return command
     }
 }

@@ -13,11 +13,11 @@
 @interface InjectionLite: NSObject
 @end
 
-@implementation InjectionLite(Boot)
+@implementation NSObject(InjectionBoot)
 
 + (void)load {
     static InjectionLite *singleton;
-    singleton = [[self alloc] init];
+    singleton = [[InjectionLite alloc] init];
 }
 
 @end
