@@ -38,13 +38,12 @@ class LogParser {
 
         let scanning = popen(scanner, "r")
         defer { _ = pclose(scanning) }
-        guard var command = scanning?.readLine() else {
+        guard let command = scanning?.readLine() else {
             log("Scanner: "+scanner)
             return nil
         }
 
-        command = makeSinglePrimary(source: source, command)
-        return command
+        return makeSinglePrimary(source: source, command)
     }
 
     func makeSinglePrimary(source: String, _ command: String) -> String {

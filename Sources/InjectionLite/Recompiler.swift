@@ -37,6 +37,8 @@ class Recompiler {
             return nil
         }
 
+        log("Recompiling \(source)")
+
         injectionNumber += 1
         let objectFile = tmpbase+".o"
         try? FileManager.default.removeItem(atPath: objectFile)

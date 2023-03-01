@@ -13,22 +13,36 @@
 import Foundation
 import DLKit
 
+public func autoBitCast<IN,OUT>(_ x: IN) -> OUT {
+    return unsafeBitCast(x, to: OUT.self)
+}
+
 class Reloader {
 
-    func rebind(image: ImageSymbols) -> [AnyClass] {
-        let oldClasses = patchClasses(in: image)
+    func rebind(image: ImageSymbols) -> ([AnyClass], Set<String>) {
+        let patched = patchClasses(in: image)
         interposeSymbols(in: image)
-        return oldClasses
+        return patched
     }
 
-    func patchClasses(in image: ImageSymbols) -> [AnyClass] {
+    func patchClasses(in image: ImageSymbols) -> ([AnyClass], Set<String>) {
+        var injectedGenerics = Set<String>()
         var oldClasses = [AnyClass]()
+
+        for entry in image.swiftSymbols(withSuffixes: ["CMa"]) {
+            if let genericClassName = entry.name.demangled?
+                    .components(separatedBy: " ").last,
+               !genericClassName.hasPrefix("__C.") {
+                injectedGenerics.insert(genericClassName)
+            }
+        }
+
         for info in image.swiftSymbols(withSuffixes: ["CN"]) {
-            let newClass: AnyClass =
-                unsafeBitCast(info.value, to: AnyClass.self)
+            let newClass: AnyClass = autoBitCast(info.value)
+            injectedGenerics.remove(_typeName(newClass))
             if let oldClass = objc_getClass(
                 class_getName(newClass)) as? AnyClass {
-                patch(oldClass: oldClass, from: newClass, in: image)
+                patchSwift(oldClass: oldClass, from: newClass, in: image)
                 if !inheritedGeneric(anyType: oldClass) {
                     swizzle(oldClass: object_getClass(oldClass),
                             from: object_getClass(newClass))
@@ -40,7 +54,7 @@ class Reloader {
         if oldClasses.count != 0 {
             log("Ignore messages about duplicate classes ⬆️")
         }
-        return oldClasses
+        return (oldClasses, injectedGenerics)
     }
 
     func inheritedGeneric(anyType: Any.Type) -> Bool {
@@ -55,7 +69,8 @@ class Reloader {
     }
 
     /** pointer to a function implementing a Swift method */
-    public typealias SIMP = @convention(c) () -> Void
+    public typealias SIMP = UnsafeMutableRawPointer
+                        // @convention(c) () -> Void
 
     /**
      Layout of a class instance. Needs to be kept in sync with ~swift/include/swift/Runtime/Metadata.h
@@ -110,8 +125,10 @@ class Reloader {
 
     }
 
-    public func patch(oldClass: AnyClass, from newClass: AnyClass,
-                      in lastImage: ImageSymbols) {
+    func iterate(oldClass: AnyClass, newClass: AnyClass,
+                 patcher: (_ slots: Int,
+                           _ oldSlots: UnsafeMutablePointer<SIMP?>,
+                           _ newSlots: UnsafeMutablePointer<SIMP?>) -> Void) {
         let existingClass = unsafeBitCast(oldClass, to:
             UnsafeMutablePointer<TargetClassMetadata>.self)
         let classMetadata = unsafeBitCast(newClass, to:
@@ -128,28 +145,35 @@ class Reloader {
                 existingClass.pointee.ClassAddressPoint) -
             MemoryLayout<TargetClassMetadata>.size) /
             MemoryLayout<SIMP>.size
-        withUnsafeMutablePointer(
-            to: &existingClass.pointee.IVarDestroyer) { to in
-                withUnsafeMutablePointer(
-                to: &classMetadata.pointee.IVarDestroyer) { from in
+
+        patcher(slots, &existingClass.pointee.IVarDestroyer,
+                       &classMetadata.pointee.IVarDestroyer)
+    }
+
+    public func patchSwift(oldClass: AnyClass, from newClass: AnyClass,
+                           in lastLoaded: ImageSymbols) {
+        iterate(oldClass: oldClass, newClass: newClass) {
+                (slots, oldSlots, newSlots) in
                 for slot in 1...slots {
-                    let impl = unsafeBitCast(from[slot],
-                        to: UnsafeMutableRawPointer.self)
-                    let lastInfo = lastImage[impl]
+                    guard let impl = newSlots[slot] else { continue }
+                    let lastInfo = lastLoaded[impl]
                     if let info = lastInfo ?? DLKit.allImages[impl],
                        Self.injectableSymbol(info.name) {
                         if lastInfo == nil, let injectedSuper =
-                            interposed[String(cString: info.name)] ?? nil {
-                            from[slot] = unsafeBitCast(injectedSuper,
-                                                       to: SIMP.self)
+                            interposed[String(cString: info.name)] {
+                            newSlots[slot] = injectedSuper
                         }
-                        to[slot] = from[slot]
                         let symbol = info.name.demangled ??
-                            String(cString: info.name)
-                        detail("Patched \(impl) \(symbol)")
+                                 String(cString: info.name)
+                        if symbol.contains(".getter : ") &&
+                            symbol.hasSuffix(">") &&
+                            !symbol.contains(".Optional<__C.") { continue }
+                        if oldSlots[slot] != newSlots[slot] {
+                            oldSlots[slot] = newSlots[slot]
+                            detail("Patched \(impl) \(symbol)")
+                        }
                     }
                 }
-            }
         }
     }
 
@@ -175,7 +199,7 @@ class Reloader {
         }
     }
 
-    var interposed = [String: UnsafeMutableRawPointer?]()
+    var interposed = [String: UnsafeMutableRawPointer]()
 
     func interposeSymbols(in image: ImageSymbols) {
         var names = [DLKit.SymbolName]()
@@ -213,7 +237,9 @@ class Reloader {
             (symname.pointee == UInt8(ascii: "_") ? 1 : 0)
         let isCPlusPlus = strncmp(symstart, "_ZN", 3) == 0
         if isCPlusPlus { return true }
-        let isSwift = strncmp(symstart, "$s", 2) == 0
+        let isSwift = strncmp(symstart, "$s", 2) == 0 &&
+                     symstart[2] != UInt8(ascii: "S") &&
+                     symstart[2] != UInt8(ascii: "s")
         if !isSwift { return false }
         var symlast = symname+strlen(symname)-1
         return
@@ -221,7 +247,7 @@ class Reloader {
             symlast.match(ascii: "D") && symlast.match(ascii: "f") ||
             // static/class methods, getters, setters
             (symlast.match(ascii: "Z") || true) &&
-                (symlast.match(ascii: "F") ||
+                (symlast.match(ascii: "F") && !symlast.match(ascii: "M") ||
                  symlast.match(ascii: "g") ||
                  symlast.match(ascii: "s")) ||
             // async [class] functions
@@ -238,7 +264,7 @@ class Reloader {
     }
 }
 
-extension UnsafePointer where Pointee == Int8 {
+private extension UnsafePointer where Pointee == Int8 {
     @inline(__always)
     mutating func match(ascii: UnicodeScalar, inc: Int = -1) -> Bool {
         if pointee == UInt8(ascii: ascii) {

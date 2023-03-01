@@ -31,18 +31,16 @@ func detail(_ str: @autoclosure () -> String) {
 public class InjectionLite: NSObject {
 
     var watcher: FileWatcher!
-    let recompiler: Recompiler
-    let reloader: Reloader
+    let recompiler = Recompiler()
+    let reloader = Reloader()
     let notification = Notification.Name("INJECTION_BUNDLE_NOTIFICATION")
 
     public override init() {
+        super.init()
+        DLKit.logger = { log($0) }
         let home = NSHomeDirectory()
             .replacingOccurrences(of: #"(/Users/[^/]+).*"#, with: "$1",
             options: .regularExpression)
-        recompiler = Recompiler()
-        reloader = Reloader()
-        super.init()
-        DLKit.logger = { log($0) }
         watcher = FileWatcher(roots: [home], callback: { filesChanged in
             for file in filesChanged {
                 self.inject(source: file)
@@ -52,12 +50,10 @@ public class InjectionLite: NSObject {
     }
 
     func inject(source: String) {
-        log("Recompiling \(source)")
-        if let dylib = recompiler
-            .recompile(source: source),
-        let image = DLKit.load(dylib: dylib) {
-            let classes = reloader.rebind(image: image)
-            SwiftSweeper.performSweep(oldClasses: classes)
+        if let dylib = recompiler.recompile(source: source),
+           let loaded = DLKit.load(dylib: dylib) {
+            let (classes, generics) = reloader.rebind(image: loaded)
+            reloader.performSweep(oldClasses: classes, generics, image: loaded)
             NotificationCenter.default.post(name: notification, object: classes)
             log("Loaded and rebound \(classes)")
         }

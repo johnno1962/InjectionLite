@@ -10,52 +10,36 @@
 //
 
 import Foundation
+import DLKit
 
-@objc public protocol SwiftInjected {
-    @objc optional func injected()
-}
 #if os(iOS) || os(tvOS)
 import UIKit
 #else
 import AppKit
 #endif
 
-extension SwiftSweeper {
+@objc public protocol SwiftInjected {
+    @objc optional func injected()
+}
 
-    private static let injectedSEL = #selector(SwiftInjected.injected)
-
-    static let debugSweep = getenv("INJECTION_SWEEP_DETAIL") != nil
-    static let sweepExclusions = { () -> NSRegularExpression? in
-        if let exclusions = getenv("INJECTION_SWEEP_EXCLUDE") {
-            let pattern = String(cString: exclusions)
-            do {
-                let filter = try NSRegularExpression(pattern: pattern, options: [])
-                log("⚠️ Excluding types matching '\(pattern)' from sweep")
-                return filter
-            } catch {
-                log("⚠️ Invalid sweep filter pattern \(error): \(pattern)")
-            }
-        }
-        return nil
-    }()
-
+extension Reloader {
+    static let injectedSEL = #selector(SwiftInjected.injected)
     static var sweepWarned = false
 
-    static func performSweep(oldClasses: [AnyClass],
-                             _ tmpfile: String = "",
-                             _ injectedGenerics: Set<String> = []) {
+    func performSweep(oldClasses: [AnyClass],
+                      _ injectedGenerics: Set<String>, image: ImageSymbols) {
         typealias ClassIMP = @convention(c) (AnyClass, Selector) -> ()
         for cls in oldClasses {
-            if let classMethod = class_getClassMethod(cls, injectedSEL) {
+            if let classMethod = class_getClassMethod(cls, Self.injectedSEL) {
                 let classIMP = method_getImplementation(classMethod)
-                unsafeBitCast(classIMP, to: ClassIMP.self)(cls, injectedSEL)
+                unsafeBitCast(classIMP, to: ClassIMP.self)(cls, Self.injectedSEL)
             }
         }
         var injectedClasses = [AnyClass]()
         for cls in oldClasses {
-            if class_getInstanceMethod(cls, injectedSEL) != nil {
+            if class_getInstanceMethod(cls, Self.injectedSEL) != nil {
                 injectedClasses.append(cls)
-                if !sweepWarned {
+                if !Self.sweepWarned {
                     log("""
                         As class \(cls) has an @objc injected() \
                         method, \(APP_NAME) will perform a "sweep" of live \
@@ -64,7 +48,7 @@ extension SwiftSweeper {
                         "INJECTION_BUNDLE_NOTIFICATION" instead.
                         \(APP_PREFIX)(note: notification may not arrive on the main thread)
                         """)
-                    sweepWarned = true
+                    Self.sweepWarned = true
                 }
                 let kvoName = "NSKVONotifying_" + NSStringFromClass(cls)
                 if let kvoCls = NSClassFromString(kvoName) {
@@ -82,14 +66,14 @@ extension SwiftSweeper {
             let app = NSApplication.shared
             #endif
             let seeds: [Any] =  [app.delegate as Any] + app.windows
-            let _ = Set<UnsafeRawPointer>()
+            var patched = Set<UnsafeRawPointer>()
             SwiftSweeper(instanceTask: {
                 (instance: AnyObject) in
                 if let instanceClass = object_getClass(instance),
                    injectedClasses.contains(where: { $0 === instanceClass }) ||
-                    !injectedGenerics.isEmpty/* &&
-                    patchGenerics(oldClass: instanceClass, tmpfile: tmpfile,
-                        injectedGenerics: injectedGenerics, patched: &patched)*/ {
+                    !injectedGenerics.isEmpty &&
+                    self.patchGenerics(oldClass: instanceClass, image: image,
+                        injectedGenerics: injectedGenerics, patched: &patched) {
                     let proto = unsafeBitCast(instance, to: SwiftInjected.self)
 //                    if SwiftEval.sharedInstance().vaccineEnabled {
 //                        performVaccineInjection(instance)
@@ -109,6 +93,51 @@ extension SwiftSweeper {
         }
     }
 
+    func patchGenerics(oldClass: AnyClass, image: ImageSymbols,
+                       injectedGenerics: Set<String>,
+                       patched: inout Set<UnsafeRawPointer>) -> Bool {
+        let typeName = _typeName(oldClass)
+        if let genericClassName = typeName.components(separatedBy: "<").first,
+           genericClassName != typeName,
+           injectedGenerics.contains(genericClassName) {
+            if patched.insert(autoBitCast(oldClass)).inserted {
+                let patched = newPatchSwift(oldClass: oldClass, in: image)
+                let swizzled = 0//swizzleBasics(oldClass: oldClass, tmpfile: tmpfile)
+                log("Injected generic '\(oldClass)' (\(patched),\(swizzled))")
+            }
+            return oldClass.instancesRespond(to: Self.injectedSEL)
+        }
+        return false
+    }
+
+    func newPatchSwift(oldClass: AnyClass, in lastLoaded: ImageSymbols) -> Int {
+        var patched = 0
+
+        iterate(oldClass: oldClass, newClass: oldClass) {
+            (slots, oldSlots, _) in
+            for slotIndex in 1...slots {
+                guard let existing = oldSlots[slotIndex],
+                      let symname = lastLoaded[existing]?.name ??
+                        DLKit.allImages[existing]?.name,
+                      Self.injectableSymbol(symname) else { continue }
+                let symbol = String(cString: symname)
+                let demangled = symname.demangled ?? symbol
+
+                guard let replacement = lastLoaded[symname] ??
+                        interposed[symbol] ?? DLKit.allImages[symname] else {
+                    log("⚠️ Class patching failed to lookup \(demangled)")
+                    continue
+                }
+                if replacement != existing {
+                    oldSlots[slotIndex] = replacement
+                    detail("Patched \(replacement) \(demangled)")
+                    patched += 1
+                }
+            }
+        }
+
+        return patched
+    }
 }
 
 class SwiftSweeper {
@@ -117,6 +146,20 @@ class SwiftSweeper {
 
     let instanceTask: (AnyObject) -> Void
     var seen = [UnsafeRawPointer: Bool]()
+    let debugSweep = getenv("INJECTION_SWEEP_DETAIL") != nil
+    let sweepExclusions = { () -> NSRegularExpression? in
+        if let exclusions = getenv("INJECTION_SWEEP_EXCLUDE") {
+            let pattern = String(cString: exclusions)
+            do {
+                let filter = try NSRegularExpression(pattern: pattern, options: [])
+                log("⚠️ Excluding types matching '\(pattern)' from sweep")
+                return filter
+            } catch {
+                log("⚠️ Invalid sweep filter pattern \(error): \(pattern)")
+            }
+        }
+        return nil
+    }()
 
     init(instanceTask: @escaping (AnyObject) -> Void) {
         self.instanceTask = instanceTask
@@ -137,7 +180,7 @@ class SwiftSweeper {
             switch style {
             case .set, .collection:
                 let containsType = _typeName(type(of: value)).contains(".Type")
-                if SwiftSweeper.debugSweep {
+                if debugSweep {
                     print("Sweeping collection:", _typeName(type(of: value)))
                 }
                 for (_, child) in mirror.children {
@@ -170,7 +213,7 @@ class SwiftSweeper {
         let reference = unsafeBitCast(instance, to: UnsafeRawPointer.self)
         if seen[reference] == nil {
             seen[reference] = true
-            if let filter = SwiftSweeper.sweepExclusions {
+            if let filter = sweepExclusions {
                 let typeName = _typeName(type(of: instance))
                 if filter.firstMatch(in: typeName,
                     range: NSMakeRange(0, typeName.utf16.count)) != nil {
@@ -178,7 +221,7 @@ class SwiftSweeper {
                 }
             }
 
-            if SwiftSweeper.debugSweep {
+            if debugSweep {
                 print("Sweeping instance \(reference) of class \(type(of: instance))")
             }
 
