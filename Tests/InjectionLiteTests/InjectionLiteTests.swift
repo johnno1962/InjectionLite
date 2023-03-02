@@ -2,7 +2,30 @@ import XCTest
 @testable import InjectionLite
 
 final class InjectionLiteTests: XCTestCase {
+
+    static var shared: InjectionLiteTests!
     var expect: XCTestExpectation!
+    let c = TestSubClass(t: 99)
+    let s = TestStruct()
+    static var value = "VALUE\(getpid())"
+    static var checks = Set([77, 88.5, 99, "__"].map { value+"-\($0)" })
+
+    override func setUp() {
+        setenv("INJECTION_DETAIL", "1", 1)
+        Self.shared = self
+        flushInjection()
+
+        NotificationCenter.default.addObserver(self,
+           selector: #selector(injectionComplete),
+            name: Notification.Name("INJECTION_BUNDLE_NOTIFICATION"), object: nil)
+
+        SwiftSweeper.seeds += [self]
+    }
+
+    func flushInjection() {
+        let soon = Date(timeInterval: 2.0, since: Date())
+        RunLoop.main.run(until: soon)
+    }
 
     func patch(file: String, with: String) {
         do {
@@ -17,14 +40,13 @@ final class InjectionLiteTests: XCTestCase {
         }
     }
 
-    func flushInjection() {
-        let soon = Date(timeInterval: 2.0, since: Date())
-        RunLoop.main.run(until: soon)
-    }
-
     func injectionComplete() {
         expect?.fulfill()
         expect = nil
+    }
+
+    @objc func injected() {
+        print("HERERRER")
     }
 
     func testExample() throws {
@@ -32,33 +54,25 @@ final class InjectionLiteTests: XCTestCase {
         // Use XCTAssert and related functions to verify your tests produce the correct
         // results.
 
-        setenv("INJECTION_DETAIL", "1", 1)
-
-        flushInjection()
-
-        NotificationCenter.default.addObserver(self,
-            selector: #selector(injectionComplete),
-            name: Notification.Name("INJECTION_BUNDLE_NOTIFICATION"), object: nil)
-
-        let s = TestStruct()
-        let c = TestSubClass()
-
-        let value = "VALUE\(getpid())"
+        let value = Self.value
         expect = expectation(description: "File1")
-        Thread.sleep(forTimeInterval: 1.0)
         patch(file: c.fileOnePath(), with: value)
         waitForExpectations(timeout: 10.0)
-        XCTAssertEqual(topLevelValue(), value, "OK")
-        XCTAssertEqual(TestStruct.staticValue(), value, "OK")
-        XCTAssertEqual(s.value(), value, "OK")
-        XCTAssertEqual(TestSuperClass.staticValue(), value, "OK")
-        XCTAssertEqual(TestSuperClass.classSuperValue(), value, "OK")
+        XCTAssertEqual(topLevelValue(), value, "top level")
+        XCTAssertEqual(TestStruct.staticValue(), value, "struct static")
+        XCTAssertEqual(s.value(), value, "struct method")
+        XCTAssertEqual(TestSuperClass<Int>.staticValue(), value, "class static")
 
-        expect = expectation(description: "File1")
-        Thread.sleep(forTimeInterval: 1.0)
-        patch(file: c.fileTwoPath(), with: value)
+        let value2 = value + "0"
+        expect = expectation(description: "File2")
+        patch(file: c.fileTwoPath(), with: value2)
         waitForExpectations(timeout: 10.0)
-        XCTAssertEqual(c.value(), value, "OK")
-        XCTAssertEqual(c.superValue(), value, "OK")
+        XCTAssertEqual(c.value(), value2, "class method")
+        XCTAssertEqual(c.superValue(), value, "inherited method")
+        XCTAssertEqual(TestSubClass(t: 99).value(), value2, "instance method")
+        XCTAssertEqual(TestSubClass.staticValue(), value, "subclass static")
+        XCTAssertEqual(TestSubClass.classValue(), value2, "subclass class")
+        XCTAssertEqual(TestSubClass.classSuperValue(), value, "subclass method")
+        XCTAssertEqual(Self.checks, [], "sweeper")
     }
 }

@@ -21,11 +21,15 @@ class Reloader {
 
     func rebind(image: ImageSymbols) -> ([AnyClass], Set<String>) {
         let patched = patchClasses(in: image)
-        interposeSymbols(in: image)
+        let rebound = interposeSymbols(in: image)
+        if patched.classes.count == 0 && rebound.count == 0 {
+            log("ℹ️ No symbols replaced, have you added -Xlinker -interposable to your project's \"Other Linker Flags\"?")
+        }
         return patched
     }
 
-    func patchClasses(in image: ImageSymbols) -> ([AnyClass], Set<String>) {
+    func patchClasses(in image: ImageSymbols)
+        -> (classes: [AnyClass], generics: Set<String>) {
         var injectedGenerics = Set<String>()
         var oldClasses = [AnyClass]()
 
@@ -43,7 +47,9 @@ class Reloader {
             if let oldClass = objc_getClass(
                 class_getName(newClass)) as? AnyClass {
                 patchSwift(oldClass: oldClass, from: newClass, in: image)
-                if !inheritedGeneric(anyType: oldClass) {
+                if inheritedGeneric(anyType: oldClass) {
+                    swizzleBasics(oldClass: oldClass, in: image)
+                } else {
                     swizzle(oldClass: object_getClass(oldClass),
                             from: object_getClass(newClass))
                     swizzle(oldClass: oldClass, from: newClass)
@@ -199,9 +205,29 @@ class Reloader {
         }
     }
 
+    func swizzle(oldClass: AnyClass, selector: Selector,
+                 in image: ImageSymbols) -> Int {
+        if let method = class_getInstanceMethod(oldClass, selector) {
+           let existing = method_getImplementation(method)
+           if let symname = DLKit.appImages[unsafeBitCast(existing,
+                           to: UnsafeMutableRawPointer.self)]?.name,
+              let replacement = unsafeBitCast(
+                image.entry(named: symname)?.value, to: IMP?.self),
+              replacement != class_replaceMethod(oldClass, selector,
+                     replacement, method_getTypeEncoding(method)) {
+               detail("Swizzled "+(symname.demangled ??
+                                   String(cString: symname)))
+               return 1
+           } else {
+               detail("⚠️ Swizzle failed -[\(oldClass) \(selector)]")
+           }
+        }
+        return 0
+    }
+
     var interposed = [String: UnsafeMutableRawPointer]()
 
-    func interposeSymbols(in image: ImageSymbols) {
+    func interposeSymbols(in image: ImageSymbols) -> [DLKit.SymbolName] {
         var names = [DLKit.SymbolName]()
         var impls = [UnsafeMutableRawPointer]()
         for entry in image.definitions {
@@ -215,14 +241,13 @@ class Reloader {
         }
 
         // apply interposes using "fishhook"
-        DLKit.appImages[names] = impls
+        let rebound = DLKit.appImages.rebind(names: names, values: impls)
 
         // Apply previous interposes
         // to the newly loaded image
-        let save = DLKit.logger
-        DLKit.logger = { _ in }
-        image[Array(interposed.keys)] = Array(interposed.values)
-        DLKit.logger = save
+        _ = image.rebind(symbols: Array(interposed.keys),
+                         values: Array(interposed.values))
+        return rebound
     }
 
     public static var preserveStatics = false

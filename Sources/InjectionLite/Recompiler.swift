@@ -26,7 +26,7 @@ class Recompiler {
     var commandCache = [String: String]()
     var injectionNumber = 0
     var tmpbase: String {
-        return "\(tmpdir)lite\(injectionNumber)"
+        return "\(tmpdir)eval\(injectionNumber)"
     }
 
     func recompile(source: String) -> String? {

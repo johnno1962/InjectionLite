@@ -60,12 +60,6 @@ extension Reloader {
         // implement -injected() method using sweep of objects in application
         if !injectedClasses.isEmpty || !injectedGenerics.isEmpty {
             log("Starting sweep \(injectedClasses), \(injectedGenerics)...")
-            #if os(iOS) || os(tvOS)
-            let app = UIApplication.shared
-            #else
-            let app = NSApplication.shared
-            #endif
-            let seeds: [Any] =  [app.delegate as Any] + app.windows
             var patched = Set<UnsafeRawPointer>()
             SwiftSweeper(instanceTask: {
                 (instance: AnyObject) in
@@ -89,7 +83,7 @@ extension Reloader {
 //                    }
 //                    #endif
                 }
-            }).sweepValue(seeds)
+            }).sweepValue(SwiftSweeper.seeds)
         }
     }
 
@@ -102,7 +96,7 @@ extension Reloader {
            injectedGenerics.contains(genericClassName) {
             if patched.insert(autoBitCast(oldClass)).inserted {
                 let patched = newPatchSwift(oldClass: oldClass, in: image)
-                let swizzled = 0//swizzleBasics(oldClass: oldClass, tmpfile: tmpfile)
+                let swizzled = swizzleBasics(oldClass: oldClass, in: image)
                 log("Injected generic '\(oldClass)' (\(patched),\(swizzled))")
             }
             return oldClass.instancesRespond(to: Self.injectedSEL)
@@ -138,10 +132,27 @@ extension Reloader {
 
         return patched
     }
+
+    @discardableResult
+    func swizzleBasics(oldClass: AnyClass, in image: ImageSymbols) -> Int {
+        var swizzled = swizzle(oldClass: oldClass,
+                               selector: Self.injectedSEL, in: image)
+        #if os(iOS) || os(tvOS)
+        swizzled += swizzle(oldClass: oldClass, selector:
+            #selector(UIViewController.viewDidLoad), in: image)
+        #endif
+        return swizzled
+    }
 }
 
 class SwiftSweeper {
 
+    #if os(iOS) || os(tvOS)
+    static let app = UIApplication.shared
+    #else
+    static let app = NSApplication.shared
+    #endif
+    static var seeds: [Any] = [app.delegate as Any] + app.windows
     static var current: SwiftSweeper?
 
     let instanceTask: (AnyObject) -> Void
