@@ -6,9 +6,9 @@ class TestSubClass: TestSuperClass<Int> {
         return #file
     }
     class func classValue() -> String {
-        return "VALUE775470"
+        return "VALUE821440"
     }
     func value() -> String {
-        return "VALUE775470"
+        return "VALUE821440"
     }
 }

@@ -29,10 +29,11 @@ class LogParser {
                                   options: .regularExpression)
             .replacingOccurrences(of: #"([$*&])"#, with: #"\\\\"#+triplesc,
                                   options: .regularExpression)
+        let option = source.hasSuffix(".swift") ? "-primary-file" : "-c"
         let scanner = """
             cd "\(logsDir)" && for log in `/bin/ls -t *.xcactivitylog`; do \
                 if /usr/bin/gunzip <$log | /usr/bin/tr '\\r' '\\n' | \
-                    /usr/bin/grep " -primary-file \(escaped) "; \
+                    /usr/bin/grep " \(option) \(escaped) "; \
                 then echo $log && exit; fi; done
             """
 

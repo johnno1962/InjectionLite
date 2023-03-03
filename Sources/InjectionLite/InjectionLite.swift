@@ -30,7 +30,7 @@ func detail(_ str: @autoclosure () -> String) {
 @objc(InjectionLite)
 public class InjectionLite: NSObject {
 
-    var watcher: FileWatcher!
+    var watcher: FileWatcher?
     let recompiler = Recompiler()
     let reloader = Reloader()
     let notification = Notification.Name("INJECTION_BUNDLE_NOTIFICATION")
@@ -51,9 +51,16 @@ public class InjectionLite: NSObject {
 
     func inject(source: String) {
         if let dylib = recompiler.recompile(source: source),
-           let loaded = DLKit.load(dylib: dylib) {
-            let (classes, generics) = reloader.rebind(image: loaded)
-            reloader.performSweep(oldClasses: classes, generics, image: loaded)
+           let image = DLKit.load(dylib: dylib) {
+            let (classes, generics) = reloader.patchClasses(in: image)
+            if classes.count != 0 {
+                log("Ignore messages about duplicate classes ⬆️")
+            }
+            let rebound = reloader.interposeSymbols(in: image)
+            if classes.count == 0 && rebound.count == 0 {
+                log("ℹ️ No symbols replaced, have you added -Xlinker -interposable to your project's \"Other Linker Flags\"?")
+            }
+            reloader.performSweep(oldClasses: classes, generics, image: image)
             NotificationCenter.default.post(name: notification, object: classes)
             log("Loaded and rebound \(classes)")
         }

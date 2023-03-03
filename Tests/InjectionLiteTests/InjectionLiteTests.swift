@@ -3,8 +3,8 @@ import XCTest
 
 final class InjectionLiteTests: XCTestCase {
 
-    static var shared: InjectionLiteTests!
-    var expect: XCTestExpectation!
+    static var shared: InjectionLiteTests?
+    var expect: XCTestExpectation?
     let c = TestSubClass(t: 99)
     let s = TestStruct()
     static var value = "VALUE\(getpid())"

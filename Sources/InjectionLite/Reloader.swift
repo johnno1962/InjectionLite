@@ -19,15 +19,6 @@ public func autoBitCast<IN,OUT>(_ x: IN) -> OUT {
 
 class Reloader {
 
-    func rebind(image: ImageSymbols) -> ([AnyClass], Set<String>) {
-        let patched = patchClasses(in: image)
-        let rebound = interposeSymbols(in: image)
-        if patched.classes.count == 0 && rebound.count == 0 {
-            log("ℹ️ No symbols replaced, have you added -Xlinker -interposable to your project's \"Other Linker Flags\"?")
-        }
-        return patched
-    }
-
     func patchClasses(in image: ImageSymbols)
         -> (classes: [AnyClass], generics: Set<String>) {
         var injectedGenerics = Set<String>()
@@ -41,8 +32,10 @@ class Reloader {
             }
         }
 
-        for info in image.swiftSymbols(withSuffixes: ["CN"]) {
-            let newClass: AnyClass = autoBitCast(info.value)
+        for aClass in Set((image.swiftSymbols(withSuffixes: ["CN"]) +
+                           image.entries(withPrefix: "OBJC_CLASS_$_"))
+                    .compactMap { $0.value }) {
+            let newClass: AnyClass = autoBitCast(aClass)
             injectedGenerics.remove(_typeName(newClass))
             if let oldClass = objc_getClass(
                 class_getName(newClass)) as? AnyClass {
@@ -56,9 +49,6 @@ class Reloader {
                 }
                 oldClasses.append(oldClass)
             }
-        }
-        if oldClasses.count != 0 {
-            log("Ignore messages about duplicate classes ⬆️")
         }
         return (oldClasses, injectedGenerics)
     }
@@ -211,8 +201,9 @@ class Reloader {
            let existing = method_getImplementation(method)
            if let symname = DLKit.appImages[unsafeBitCast(existing,
                            to: UnsafeMutableRawPointer.self)]?.name,
-              let replacement = unsafeBitCast(
-                image.entry(named: symname)?.value, to: IMP?.self),
+              let replacement =  unsafeBitCast(image[symname] ?? [
+                image, DLKit.mainImage, DLKit.appImages].compactMap({
+                    $0.entry(named: symname)?.value }).first, to: IMP?.self),
               replacement != class_replaceMethod(oldClass, selector,
                      replacement, method_getTypeEncoding(method)) {
                detail("Swizzled "+(symname.demangled ??
@@ -230,7 +221,7 @@ class Reloader {
     func interposeSymbols(in image: ImageSymbols) -> [DLKit.SymbolName] {
         var names = [DLKit.SymbolName]()
         var impls = [UnsafeMutableRawPointer]()
-        for entry in image.definitions {
+        for entry in image {
             guard let value = entry.value,
                   Self.injectableSymbol(entry.name) else { continue }
             let symbol = String(cString: entry.name)

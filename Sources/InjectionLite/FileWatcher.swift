@@ -20,6 +20,8 @@ import Foundation
 
 public class FileWatcher: NSObject {
     public typealias InjectionCallback = (_ filesChanged: [String]) -> Void
+    static var INJECTABLE_PATTERN = try! NSRegularExpression(
+        pattern: "[^~]\\.(mm?|cpp|swift|storyboard|xib)$")
 
     static let logsPref = "HotReloadingBuildLogsDir"
     static var derivedLog =
@@ -116,7 +118,8 @@ public class FileWatcher: NSObject {
             if eventId < eventsStart { continue }
             #endif
 
-            if path.hasSuffix(".swift") && !path.hasSuffix("~.swift") &&
+            if Self.INJECTABLE_PATTERN.firstMatch(in: path, range:
+                        NSMakeRange(0, path.utf16.count)) != nil  &&
                 path.range(of: "DerivedData/|InjectionProject/|.DocumentRevisions-|main.mm?$",
                             options:.regularExpression) == nil &&
                 FileManager.default.fileExists(atPath: path as String) {
