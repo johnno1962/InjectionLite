@@ -137,6 +137,14 @@ class Reloader {
 
         guard newSwiftCondition || oldSwiftCondition else { return }
 
+        if classMetadata.pointee.ClassSize != existingClass.pointee.ClassSize {
+            log("""
+                ⚠️ Adding or [re]moving methods of non-final classes is not supported. \
+                Your application will likely crash. Paradoxically, you can avoid this by \
+                making the class you are trying to inject (and add methods to) "final". ⚠️
+                """)
+        }
+
         let slots = (Int(existingClass.pointee.ClassSize -
                 existingClass.pointee.ClassAddressPoint) -
             MemoryLayout<TargetClassMetadata>.size) /
@@ -280,7 +288,7 @@ class Reloader {
     }
 }
 
-private extension UnsafePointer where Pointee == Int8 {
+private extension UnsafePointer where Pointee == CChar {
     @inline(__always)
     mutating func match(ascii: UnicodeScalar, inc: Int = -1) -> Bool {
         if pointee == UInt8(ascii: ascii) {
