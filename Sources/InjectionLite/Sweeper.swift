@@ -28,6 +28,7 @@ extension Reloader {
 
     func performSweep(oldClasses: [AnyClass],
                       _ injectedGenerics: Set<String>, image: ImageSymbols) {
+        /// Class level injected() methods
         typealias ClassIMP = @convention(c) (AnyClass, Selector) -> ()
         for cls in oldClasses {
             if let classMethod = class_getClassMethod(cls, Self.injectedSEL) {
@@ -35,6 +36,7 @@ extension Reloader {
                 unsafeBitCast(classIMP, to: ClassIMP.self)(cls, Self.injectedSEL)
             }
         }
+        /// Instance level injected() methods...
         var injectedClasses = [AnyClass]()
         for cls in oldClasses {
             if class_getInstanceMethod(cls, Self.injectedSEL) != nil {
@@ -87,6 +89,7 @@ extension Reloader {
         }
     }
 
+    /// Generics have per-specialisation vtables and crash Objective runtime apis
     func patchGenerics(oldClass: AnyClass, image: ImageSymbols,
                        injectedGenerics: Set<String>,
                        patched: inout Set<UnsafeRawPointer>) -> Bool {
@@ -104,6 +107,7 @@ extension Reloader {
         return false
     }
 
+    /// Patch vtable by looking up functions by symbol name
     func newPatchSwift(oldClass: AnyClass, in lastLoaded: ImageSymbols) -> Int {
         var patched = 0
 
@@ -133,6 +137,7 @@ extension Reloader {
         return patched
     }
 
+    /// Best effort here for generics. Swizzle injected() and viewDidLoad() methods.
     @discardableResult
     func swizzleBasics(oldClass: AnyClass, in image: ImageSymbols) -> Int {
         var swizzled = swizzle(oldClass: oldClass,
@@ -147,6 +152,7 @@ extension Reloader {
 
 class SwiftSweeper {
 
+    /// Seeds for the start of the "sweep" to implement instance level injected() method.
     #if os(iOS) || os(tvOS)
     static let app = UIApplication.shared
     #else

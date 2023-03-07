@@ -3,7 +3,6 @@
 A cut down, standalone, Swift Package version of the
 [InjectionIII](https://github.com/johnno1962/InjectionIII)
 application for use in the simulator or unsandboxed macOS.
-This version will only recompile and inject Swift source files.
 
 Simply add this package to your project and when you save a
 source file (somewhere in your home directory), this package

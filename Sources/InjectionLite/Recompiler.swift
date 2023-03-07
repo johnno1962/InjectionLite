@@ -16,6 +16,7 @@ import Popen
 
 class Recompiler {
 
+    /// A cache is kept of compiltaion commands in /tmp as Xcode can remove logs.
     var appName = Bundle.main.executableURL?.lastPathComponent ?? "unknown"
     lazy var cacheFile = "/tmp/\(appName)_builds.plist"
     lazy var longTermCache = NSMutableDictionary(contentsOfFile: cacheFile) ??
@@ -29,6 +30,7 @@ class Recompiler {
         return "\(tmpdir)eval\(injectionNumber)"
     }
 
+    /// Recompile a source to produce a dynamic library that can be loaded
     func recompile(source: String) -> String? {
         guard let command = commandCache[source] ??
                 parser.command(for: source) ??
@@ -77,6 +79,7 @@ class Recompiler {
     public var arch = "x86_64"
     #endif
 
+    /// Create a dyanmic library from an object file
     func link(objectFile: String, _ compileCommand: String) -> String? {
         var platform = "iPhoneSimulator"
         var sdk = "\(xcodeDev)/Platforms/\(platform).platform/Developer/SDKs/\(platform).sdk"

@@ -15,13 +15,14 @@ import Popen
 
 class LogParser {
 
+    /// "grep" the most recent build log for the command to recompile a file
     func command(for source: String) -> String? {
         guard let logsDir = FileWatcher.derivedLog.flatMap({
             URL(fileURLWithPath: $0)
                 .deletingLastPathComponent().path
                 .replacingOccurrences(of: "$", with: "\\$")
         }) else {
-            log("⚠️ Logs dir not initialised")
+            log("⚠️ Logs dir not initialised. Edit a file and build your project.")
             return nil
         }
         let triplesc = #"\\\\\\$1"#, escaped = source
@@ -47,6 +48,7 @@ class LogParser {
         return makeSinglePrimary(source: source, command)
     }
 
+    /// re-process command to only compile a single file at a time.
     func makeSinglePrimary(source: String, _ command: String) -> String {
         func escape(path: String) -> String {
             return path.replacingOccurrences(of: #"([ '(){}$&*])"#,
@@ -94,6 +96,7 @@ class LogParser {
                 "-frontend-parseable-output ", with: "")
     }
 
+    /// determine the real casing of a path on the file system
     public func actualCase(path: String) -> String? {
         let fm = FileManager.default
         if fm.fileExists(atPath: path) {

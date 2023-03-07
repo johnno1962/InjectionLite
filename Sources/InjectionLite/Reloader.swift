@@ -19,6 +19,7 @@ public func autoBitCast<IN,OUT>(_ x: IN) -> OUT {
 
 class Reloader {
 
+    /// The vtable of classes needs to be patched for overridable methods
     func patchClasses(in image: ImageSymbols)
         -> (classes: [AnyClass], generics: Set<String>) {
         var injectedGenerics = Set<String>()
@@ -53,6 +54,7 @@ class Reloader {
         return (oldClasses, injectedGenerics)
     }
 
+    /// Does the type derive from a generic (crashes some Objective-C apis)
     func inheritedGeneric(anyType: Any.Type) -> Bool {
         var inheritedGeneric: Any.Type? = anyType
         while let parent = inheritedGeneric {
@@ -121,6 +123,7 @@ class Reloader {
 
     }
 
+    /// Extract pointers to class vtables in class meta-data
     func iterate(oldClass: AnyClass, newClass: AnyClass,
                  patcher: (_ slots: Int,
                            _ oldSlots: UnsafeMutablePointer<SIMP?>,
@@ -154,6 +157,7 @@ class Reloader {
                        &classMetadata.pointee.IVarDestroyer)
     }
 
+    /// Patch "injectable" members in class vtable
     public func patchSwift(oldClass: AnyClass, from newClass: AnyClass,
                            in lastLoaded: ImageSymbols) {
         iterate(oldClass: oldClass, newClass: newClass) {
@@ -181,6 +185,7 @@ class Reloader {
         }
     }
 
+    /// Old-school swizzling for Objective-C methods
     func swizzle(oldClass: AnyClass?,
                  from newClass: AnyClass?) {
         var methodCount: UInt32 = 0, swizzled = 0
@@ -203,13 +208,14 @@ class Reloader {
         }
     }
 
+    /// Swizzle an individual method (for types inheriting from generics)
     func swizzle(oldClass: AnyClass, selector: Selector,
                  in image: ImageSymbols) -> Int {
         if let method = class_getInstanceMethod(oldClass, selector) {
            let existing = method_getImplementation(method)
            if let symname = DLKit.appImages[unsafeBitCast(existing,
                            to: UnsafeMutableRawPointer.self)]?.name,
-              let replacement =  unsafeBitCast(image[symname] ?? [
+              let replacement = unsafeBitCast(image[symname] ?? [
                 image, DLKit.mainImage, DLKit.appImages].compactMap({
                     $0.entry(named: symname)?.value }).first, to: IMP?.self),
               replacement != class_replaceMethod(oldClass, selector,
@@ -226,6 +232,7 @@ class Reloader {
 
     var interposed = [String: UnsafeMutableRawPointer]()
 
+    /// Rebind "injectable" symbols in the app to the new implementations just loaded
     func interposeSymbols(in image: ImageSymbols) -> [DLKit.SymbolName] {
         var names = [DLKit.SymbolName]()
         var impls = [UnsafeMutableRawPointer]()
@@ -253,7 +260,7 @@ class Reloader {
 
     /// Determine if symbol name is injectable
     /// - Parameter symname: Pointer to symbol name
-    /// - Returns: Whether symbol should be patched
+    /// - Returns: Whether symbol should be patched/interposed
     public static var injectableSymbol: // STSymbolFilter
         (UnsafePointer<CChar>) -> Bool = { symname in
 //        print("Injectable?", String(cString: symname))

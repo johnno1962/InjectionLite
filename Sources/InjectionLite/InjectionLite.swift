@@ -35,6 +35,7 @@ public class InjectionLite: NSObject {
     let reloader = Reloader()
     let notification = Notification.Name("INJECTION_BUNDLE_NOTIFICATION")
 
+    /// Called from InjectionBoot.m, setup filewatch and wait...
     public override init() {
         super.init()
         DLKit.logger = { log($0) }

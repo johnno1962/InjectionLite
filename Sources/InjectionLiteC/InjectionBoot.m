@@ -15,6 +15,7 @@
 
 @implementation NSObject(InjectionBoot)
 
+/// This will be called as soon as the package is loaded into memory.
 + (void)load {
     static InjectionLite *singleton;
     singleton = [[InjectionLite alloc] init];
