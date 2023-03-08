@@ -2,7 +2,7 @@
 import Foundation
 
 func topLevelValue() -> String {
-    return "VALUE82144"
+    return "VALUE47656"
 }
 
 struct TestStruct {
@@ -10,10 +10,10 @@ struct TestStruct {
     let c2 = TestSuperClass(t: 88.5)
     let c3 = TestSuperClass(t: "__")
     static func staticValue() -> String {
-        return "VALUE82144"
+        return "VALUE47656"
     }
     func value() -> String {
-        return "VALUE82144"
+        return "VALUE47656"
     }
 }
 
@@ -23,19 +23,19 @@ class TestSuperClass<T>: NSObject {
         self.t = t
     }
     func fileOnePath() -> String {
-        return #file
+        return #filePath
     }
     static func staticValue() -> String {
-        return "VALUE82144"
+        return "VALUE47656"
     }
     class func classSuperValue() -> String {
-        return "VALUE82144"
+        return "VALUE47656"
     }
     func superValue() -> String {
-        return "VALUE82144"
+        return "VALUE47656"
     }
 
     @objc func injected() {
-        InjectionLiteTests.checks.remove("VALUE82144-\(t)")
+        InjectionLiteTests.checks.remove("VALUE47656-\(t)")
     }
 }

@@ -3,12 +3,12 @@ import Foundation
 
 class TestSubClass: TestSuperClass<Int> {
     func fileTwoPath() -> String {
-        return #file
+        return #filePath
     }
     class func classValue() -> String {
-        return "VALUE821440"
+        return "VALUE476560"
     }
     func value() -> String {
-        return "VALUE821440"
+        return "VALUE476560"
     }
 }
