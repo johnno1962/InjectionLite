@@ -12,10 +12,6 @@
 import Foundation
 import DLKit
 
-#if !targetEnvironment(simulator) && !os(macOS)
-#error("InjectionLite can only be used in the simulator or unsandboxed macOS")
-#endif
-
 let APP_PREFIX = "🔥 ", APP_NAME = "InjectionLite"
 func log(_ what: Any...) {
     print(APP_PREFIX+what.map {"\($0)"}.joined(separator: " "))
@@ -38,6 +34,10 @@ public class InjectionLite: NSObject {
     /// Called from InjectionBoot.m, setup filewatch and wait...
     public override init() {
         super.init()
+        #if !targetEnvironment(simulator) && !os(macOS)
+        #warning("InjectionLite can only be used in the simulator or unsandboxed macOS")
+        log(APP_NAME+": can only be used in the simulator or unsandboxed macOS")
+        #endif
         DLKit.logger = { log($0) }
         let home = NSHomeDirectory()
             .replacingOccurrences(of: #"(/Users/[^/]+).*"#, with: "$1",

@@ -12,11 +12,7 @@
 //  backdating the event stream to just before the app launched.
 //
 
-#if targetEnvironment(simulator) && !APP_SANDBOXED || os(macOS)
 import Foundation
-#if SWIFT_PACKAGE
-//import HotReloadingGuts
-#endif
 
 public class FileWatcher: NSObject {
     public typealias InjectionCallback = (_ filesChanged: [String]) -> Void
@@ -179,5 +175,4 @@ let kFSEventStreamCreateFlagFileEvents: FSEventStreamCreateFlags = 16
 let kFSEventStreamEventFlagItemRenamed = 0x00000800
 let kFSEventStreamEventFlagItemModified = 0x00001000
 fileprivate var watchers = [FSEventStreamRef: FileWatcher]()
-#endif
 #endif
