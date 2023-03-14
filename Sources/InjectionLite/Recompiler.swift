@@ -24,7 +24,6 @@ class Recompiler {
 
     let parser = LogParser()
     let tmpdir = NSTemporaryDirectory()
-    var commandCache = [String: String]()
     var injectionNumber = 0
     var tmpbase: String {
         return "\(tmpdir)eval\(injectionNumber)"
@@ -32,9 +31,8 @@ class Recompiler {
 
     /// Recompile a source to produce a dynamic library that can be loaded
     func recompile(source: String) -> String? {
-        guard let command = commandCache[source] ??
-                parser.command(for: source) ??
-                longTermCache[source] as? String else {
+        guard let command = longTermCache[source] as? String ??
+                parser.command(for: source) else {
             log("⚠️ Could not locate command for \(source)")
             return nil
         }
@@ -46,12 +44,14 @@ class Recompiler {
         try? FileManager.default.removeItem(atPath: objectFile)
         let compiling = popen(command+" -o \(objectFile)", "w")
         guard pclose(compiling) >> 8 == EXIT_SUCCESS else {
+            longTermCache.removeObject(forKey: source)
+            longTermCache.write(toFile: cacheFile,
+                                atomically: true)
             detail("Processed: "+command)
             log("⚠️ Recompilation failed")
             return nil
         }
 
-        commandCache[source] = command
         if longTermCache[source] as? String != command {
             longTermCache[source] = command
             longTermCache.write(toFile: cacheFile,
@@ -68,6 +68,8 @@ class Recompiler {
         #"-(?:isysroot|sdk)(?: |"\n")((\#(fileNameRegex)/Contents/Developer)/Platforms/(\w+)\.platform\#(fileNameRegex)\#\.sdk)"#)
 
     var xcodeDev = "/Applications/Xcode.app/Contents/Developer"
+    var platform = "iPhoneSimulator"
+
     func evalError(_ str: String) -> Int {
         log("⚠️ "+str)
         return 0
@@ -81,7 +83,6 @@ class Recompiler {
 
     /// Create a dyanmic library from an object file
     func link(objectFile: String, _ compileCommand: String) -> String? {
-        var platform = "iPhoneSimulator"
         var sdk = "\(xcodeDev)/Platforms/\(platform).platform/Developer/SDKs/\(platform).sdk"
         if let match = Self.parsePlatform.firstMatch(in: compileCommand,
             options: [], range: NSMakeRange(0, compileCommand.utf16.count)) {

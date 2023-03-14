@@ -38,8 +38,18 @@ class Reloader {
                     .compactMap { $0.value }) {
             let newClass: AnyClass = autoBitCast(aClass)
             injectedGenerics.remove(_typeName(newClass))
-            if let oldClass = objc_getClass(
-                class_getName(newClass)) as? AnyClass {
+            var oldClass: AnyClass? = objc_getClass(
+                class_getName(newClass)) as? AnyClass
+            if oldClass == nil {
+                var info = Dl_info()
+                if dladdr(autoBitCast(newClass), &info) != 0,
+                   let symbol = info.dli_sname,
+                   let mainClass = dlsym(DLKit.RTLD_MAIN_ONLY, symbol) {
+                    oldClass = autoBitCast(mainClass)
+                }
+            }
+
+            if let oldClass = oldClass {
                 patchSwift(oldClass: oldClass, from: newClass, in: image)
                 if inheritedGeneric(anyType: oldClass) {
                     swizzleBasics(oldClass: oldClass, in: image)
@@ -56,12 +66,15 @@ class Reloader {
 
     /// Does the type derive from a generic (crashes some Objective-C apis)
     func inheritedGeneric(anyType: Any.Type) -> Bool {
-        var inheritedGeneric: Any.Type? = anyType
+        var inheritedGeneric: AnyClass? = anyType as? AnyClass
+        if class_getSuperclass(inheritedGeneric) == nil {
+            return true
+        }
         while let parent = inheritedGeneric {
             if _typeName(parent).hasSuffix(">") {
                 return true
             }
-            inheritedGeneric = (parent as? AnyClass)?.superclass()
+            inheritedGeneric = class_getSuperclass(parent)
         }
         return false
     }

@@ -9,6 +9,7 @@
 //  Created by John Holdsworth on 25/02/2023.
 //
 
+import InjectionLiteC
 import Foundation
 import DLKit
 
@@ -51,19 +52,66 @@ public class InjectionLite: NSObject {
     }
 
     func inject(source: String) {
+        let isTest = source.replacingOccurrences(of: #"Tests?\."#,
+            with: "-", options: .regularExpression) != source
         if let dylib = recompiler.recompile(source: source),
+           isTest ? loadXCTest : true,
            let image = DLKit.load(dylib: dylib) {
             let (classes, generics) = reloader.patchClasses(in: image)
             if classes.count != 0 {
                 log("Ignore messages about duplicate classes ⬆️")
             }
+
             let rebound = reloader.interposeSymbols(in: image)
-            if classes.count == 0 && rebound.count == 0 {
+            if classes.count == 0 && rebound.count == 0 &&
+                image.entries(withPrefix: "_OBJC_$_CATEGORY_").count == 0 {
                 log("ℹ️ No symbols replaced, have you added -Xlinker -interposable to your project's \"Other Linker Flags\"?")
             }
+
             reloader.performSweep(oldClasses: classes, generics, image: image)
             NotificationCenter.default.post(name: notification, object: classes)
             log("Loaded and rebound \(classes)")
+
+            if let XCTestCase = objc_getClass("XCTestCase") as? AnyClass {
+                for test in classes where isSubclass(test, of: XCTestCase) {
+                    print("\n\(APP_PREFIX)Running test \(test)")
+                    NSObject.runXCTestCase(test)
+                }
+            }
         }
     }
+
+    open func isSubclass(_ subClass: AnyClass, of aClass: AnyClass) -> Bool {
+        var subClass: AnyClass? = subClass
+        repeat {
+            if subClass == aClass {
+                return true
+            }
+            subClass = class_getSuperclass(subClass)
+        } while subClass != nil
+        return false
+    }
+
+    lazy var loadXCTest: Bool = {
+        let platformDev = recompiler.xcodeDev +
+            "/Platforms/\(recompiler.platform).platform/Developer/"
+
+        _ = DLKit.load(dylib: platformDev +
+                       "Library/Frameworks/XCTest.framework/XCTest")
+        _ = DLKit.load(dylib: platformDev +
+                       "usr/lib/libXCTestSwiftSupport.dylib")
+
+        if let plugins = Bundle.main.path(forResource: "PlugIns", ofType: nil),
+           let contents = try? FileManager.default
+            .contentsOfDirectory(atPath: plugins) {
+            for xctest in contents {
+                let name = xctest
+                    .replacingOccurrences(of: ".xctest", with: "")
+                if name != xctest {
+                    _ = DLKit.load(dylib: plugins+"/"+xctest+"/"+name)
+                }
+            }
+        }
+        return true
+    }()
 }

@@ -66,7 +66,7 @@ extension Reloader {
             SwiftSweeper(instanceTask: {
                 (instance: AnyObject) in
                 if let instanceClass = object_getClass(instance),
-                   injectedClasses.contains(where: { $0 === instanceClass }) ||
+                   injectedClasses.contains(where: { $0 == instanceClass }) ||
                     !injectedGenerics.isEmpty &&
                     self.patchGenerics(oldClass: instanceClass, image: image,
                         injectedGenerics: injectedGenerics, patched: &patched) {

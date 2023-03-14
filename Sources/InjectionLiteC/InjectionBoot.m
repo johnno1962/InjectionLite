@@ -8,7 +8,9 @@
 //  Created by John Holdsworth on 25/02/2023.
 //
 
-#import <Foundation/Foundation.h>
+#import "InjectionLiteC.h"
+#import <XCTest/XCTestSuite.h>
+#import <objc/runtime.h>
 
 @interface InjectionLite: NSObject
 @end
@@ -19,6 +21,16 @@
 + (void)load {
     static InjectionLite *singleton;
     singleton = [[InjectionLite alloc] init];
+}
+
++ (void)runXCTestCase:(Class)aTestCase {
+    Class _XCTestSuite = objc_getClass("XCTestSuite");
+    XCTestSuite *suite0 = [_XCTestSuite testSuiteWithName: @"InjectedTest"];
+    XCTestSuite *suite = [aTestCase defaultTestSuite];
+    Class _XCTestSuiteRun = objc_getClass("XCTestSuiteRun");
+    XCTestSuiteRun *tr = [_XCTestSuiteRun testRunWithTest: suite];
+    [suite0 addTest:suite];
+    [suite0 performTest:tr];
 }
 
 @end
