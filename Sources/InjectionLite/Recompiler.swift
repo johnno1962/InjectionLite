@@ -33,7 +33,8 @@ class Recompiler {
     func recompile(source: String) -> String? {
         guard let command = longTermCache[source] as? String ??
                 parser.command(for: source) else {
-            log("⚠️ Could not locate command for \(source)")
+            log("⚠️ Could not locate command for " + source +
+                ". Injection is not compatible with \"Whole Module\" Compilation Mode")
             return nil
         }
 

@@ -113,7 +113,7 @@ extension Reloader {
 
         iterate(oldClass: oldClass, newClass: oldClass) {
             (slots, oldSlots, _) in
-            for slotIndex in 1...slots {
+            for slotIndex in 1..<1+slots {
                 guard let existing = oldSlots[slotIndex],
                       let symname = lastLoaded[existing]?.name ??
                         DLKit.allImages[existing]?.name,

@@ -175,7 +175,7 @@ class Reloader {
                            in lastLoaded: ImageSymbols) {
         iterate(oldClass: oldClass, newClass: newClass) {
                 (slots, oldSlots, newSlots) in
-                for slot in 1...slots {
+                for slot in 1..<1+slots {
                     guard let impl = newSlots[slot] else { continue }
                     let lastInfo = lastLoaded[impl]
                     if let info = lastInfo ?? DLKit.allImages[impl],
