@@ -16,9 +16,18 @@ import Popen
 
 class Recompiler {
 
-    /// A cache is kept of compiltaion commands in /tmp as Xcode can remove logs.
-    var appName = Bundle.main.executableURL?.lastPathComponent ?? "unknown"
-    lazy var cacheFile = "/tmp/\(appName)_builds.plist"
+    /// A cache is kept of compiltaion commands in /tmp as Xcode housekeeps logs.
+    let appName = Bundle.main.executableURL?.lastPathComponent ?? "unknown"
+    #if os(macOS) || targetEnvironment(macCatalyst)
+    let sdk = "macOS"
+    #elseif os(tvOS)
+    let sdk = "tvOS"
+    #elseif targetEnvironment(simulator)
+    let sdk = "iOS"
+    #else
+    let sdk = "maciOS"
+    #endif
+    lazy var cacheFile = "/tmp/\(appName)_\(sdk)_builds.plist"
     lazy var longTermCache = NSMutableDictionary(contentsOfFile: cacheFile) ??
         NSMutableDictionary()
 
