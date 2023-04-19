@@ -54,20 +54,21 @@ class Recompiler {
         try? FileManager.default.removeItem(atPath: objectFile)
         let compiling = popen(command+" -o \(objectFile)", "w")
         guard pclose(compiling) >> 8 == EXIT_SUCCESS else {
-            longTermCache.removeObject(forKey: source)
-            longTermCache.write(toFile: cacheFile,
-                                atomically: true)
-            detail("Processed: "+command)
+            detail("Processed: "+command+" -o \(objectFile)")
             log("⚠️ Recompilation failed")
             return nil
         }
 
         if longTermCache[source] as? String != command {
             longTermCache[source] = command
-            longTermCache.write(toFile: cacheFile,
-                                atomically: true)
+            writeToCache()
         }
         return link(objectFile: objectFile, command)
+    }
+
+    func writeToCache() {
+        longTermCache.write(toFile: cacheFile,
+                            atomically: true)
     }
 
     /// Regex for path argument, perhaps containg escaped spaces
@@ -133,7 +134,7 @@ class Recompiler {
         let dylib = tmpbase+".dylib"
         let toolchain = xcodeDev+"/Toolchains/XcodeDefault.xctoolchain"
         let frameworks = Bundle.main.privateFrameworksPath ?? "/tmp"
-        let linking = popen("""
+        let linkCommand = """
             "\(toolchain)/usr/bin/clang" -arch "\(arch)" \
                 -Xlinker -dylib -isysroot "__PLATFORM__" \
                 -L"\(toolchain)/usr/lib/swift/\(platform.lowercased())" \(osSpecific) \
@@ -141,8 +142,9 @@ class Recompiler {
                 -Xlinker 2 -Xlinker -interposable -fobjc-arc \
                 -fprofile-instr-generate \(objectFile) -L "\(frameworks)" -F "\(frameworks)" \
                 -rpath "\(frameworks)" -o \"\(dylib)\" 2>&1
-            """.replacingOccurrences(of: "__PLATFORM__", with: sdk), "r")
+            """.replacingOccurrences(of: "__PLATFORM__", with: sdk)
 
+        let linking = popen(linkCommand, "r")
         let errs = linking?.readAll() ?? ""
         let status = pclose(linking)
         guard status >> 8 == EXIT_SUCCESS else {

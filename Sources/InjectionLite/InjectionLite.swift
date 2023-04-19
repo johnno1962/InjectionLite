@@ -78,6 +78,9 @@ public class InjectionLite: NSObject {
                     NSObject.runXCTestCase(test)
                 }
             }
+        } else {
+            recompiler.longTermCache.removeObject(forKey: source)
+            recompiler.writeToCache()
         }
     }
 
