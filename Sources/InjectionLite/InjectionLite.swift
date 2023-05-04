@@ -24,6 +24,11 @@ func detail(_ str: @autoclosure () -> String) {
     }
 }
 
+// for compatability
+@objc(InjectionClient)
+public class InjectionClient: NSObject {
+}
+
 @objc(InjectionLite)
 public class InjectionLite: NSObject {
 
