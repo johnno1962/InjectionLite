@@ -13,7 +13,7 @@
 import Foundation
 import Popen
 
-class LogParser {
+struct LogParser {
 
     /// "grep" the most recent build log for the command to recompile a file
     func command(for source: String) -> String? {

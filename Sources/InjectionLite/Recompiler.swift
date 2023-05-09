@@ -14,7 +14,7 @@
 import Foundation
 import Popen
 
-class Recompiler {
+struct Recompiler {
 
     /// A cache is kept of compiltaion commands in /tmp as Xcode housekeeps logs.
     let appName = Bundle.main.executableURL?.lastPathComponent ?? "unknown"
@@ -35,11 +35,11 @@ class Recompiler {
     let tmpdir = NSTemporaryDirectory()
     var injectionNumber = 0
     var tmpbase: String {
-        return "\(tmpdir)eval\(injectionNumber)"
+        return tmpdir+"eval\(injectionNumber)"
     }
 
     /// Recompile a source to produce a dynamic library that can be loaded
-    func recompile(source: String) -> String? {
+    mutating func recompile(source: String) -> String? {
         guard let command = longTermCache[source] as? String ??
                 parser.command(for: source) else {
             log("⚠️ Could not locate command for " + source +
@@ -66,7 +66,7 @@ class Recompiler {
         return link(objectFile: objectFile, command)
     }
 
-    func writeToCache() {
+    mutating func writeToCache() {
         longTermCache.write(toFile: cacheFile,
                             atomically: true)
     }
@@ -93,7 +93,7 @@ class Recompiler {
     #endif
 
     /// Create a dyanmic library from an object file
-    func link(objectFile: String, _ compileCommand: String) -> String? {
+    mutating func link(objectFile: String, _ compileCommand: String) -> String? {
         var sdk = "\(xcodeDev)/Platforms/\(platform).platform/Developer/SDKs/\(platform).sdk"
         if let match = Self.parsePlatform.firstMatch(in: compileCommand,
             options: [], range: NSMakeRange(0, compileCommand.utf16.count)) {

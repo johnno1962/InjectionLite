@@ -33,8 +33,8 @@ public class InjectionClient: NSObject {
 public class InjectionLite: NSObject {
 
     var watcher: FileWatcher?
-    let recompiler = Recompiler()
-    let reloader = Reloader()
+    var recompiler = Recompiler()
+    var reloader = Reloader()
     let notification = Notification.Name("INJECTION_BUNDLE_NOTIFICATION")
 
     /// Called from InjectionBoot.m, setup filewatch and wait...

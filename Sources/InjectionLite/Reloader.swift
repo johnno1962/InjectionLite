@@ -17,7 +17,7 @@ public func autoBitCast<IN,OUT>(_ x: IN) -> OUT {
     return unsafeBitCast(x, to: OUT.self)
 }
 
-class Reloader {
+struct Reloader {
 
     /// The vtable of classes needs to be patched for overridable methods
     func patchClasses(in image: ImageSymbols)
@@ -246,7 +246,7 @@ class Reloader {
     var interposed = [String: UnsafeMutableRawPointer]()
 
     /// Rebind "injectable" symbols in the app to the new implementations just loaded
-    func interposeSymbols(in image: ImageSymbols) -> [DLKit.SymbolName] {
+    mutating func interposeSymbols(in image: ImageSymbols) -> [DLKit.SymbolName] {
         var names = [DLKit.SymbolName]()
         var impls = [UnsafeMutableRawPointer]()
         for entry in image {
