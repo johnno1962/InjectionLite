@@ -9,7 +9,7 @@
 //
 //  Created by John Holdsworth on 25/02/2023.
 //
-
+#if DEBUG
 import Foundation
 import Popen
 
@@ -122,3 +122,4 @@ struct LogParser {
         return out
     }
 }
+#endif

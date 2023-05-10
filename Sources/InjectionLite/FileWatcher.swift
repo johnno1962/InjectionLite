@@ -11,7 +11,7 @@
 //  "Enhanced" to extract the last modified build log directory by
 //  backdating the event stream to just before the app launched.
 //
-
+#if DEBUG
 import Foundation
 
 public class FileWatcher: NSObject {
@@ -175,4 +175,5 @@ let kFSEventStreamCreateFlagFileEvents: FSEventStreamCreateFlags = 16
 let kFSEventStreamEventFlagItemRenamed = 0x00000800
 let kFSEventStreamEventFlagItemModified = 0x00001000
 fileprivate var watchers = [FSEventStreamRef: FileWatcher]()
+#endif
 #endif

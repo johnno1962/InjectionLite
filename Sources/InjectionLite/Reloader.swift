@@ -9,7 +9,7 @@
 //
 //  Created by John Holdsworth on 25/02/2023.
 //
-
+#if DEBUG
 import Foundation
 import DLKit
 
@@ -318,3 +318,4 @@ private extension UnsafePointer where Pointee == CChar {
         return false
     }
 }
+#endif

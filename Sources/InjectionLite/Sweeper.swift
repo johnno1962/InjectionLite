@@ -8,7 +8,7 @@
 //
 //  Created by John Holdsworth on 25/02/2023.
 //
-
+#if DEBUG
 import Foundation
 import DLKit
 
@@ -311,3 +311,4 @@ extension NSDictionary {
         self.allValues.forEach { SwiftSweeper.current?.sweepInstance($0 as AnyObject) }
     }
 }
+#endif
