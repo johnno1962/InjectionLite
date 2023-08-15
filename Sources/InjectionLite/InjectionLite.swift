@@ -59,6 +59,7 @@ public class InjectionLite: NSObject {
     func inject(source: String) {
         let isTest = source.replacingOccurrences(of: #"Tests?\."#,
             with: "-", options: .regularExpression) != source
+        let usingCached = recompiler.longTermCache[source] != nil
         if let dylib = recompiler.recompile(source: source),
            isTest ? loadXCTest : true,
            let image = DLKit.load(dylib: dylib) {
@@ -83,7 +84,7 @@ public class InjectionLite: NSObject {
                     NSObject.runXCTestCase(test)
                 }
             }
-        } else if recompiler.longTermCache.object(forKey: source) != nil {
+        } else if usingCached {
             recompiler.longTermCache.removeObject(forKey: source)
             recompiler.writeToCache()
             inject(source: source)
