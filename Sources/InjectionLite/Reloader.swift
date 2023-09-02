@@ -286,36 +286,29 @@ struct Reloader {
                      symstart[2] != UInt8(ascii: "s")
         if !isSwift { return false }
         var symlast = symname+strlen(symname)-1
+
+        func match(ascii: UnicodeScalar, inc: Int = -1) -> Bool {
+            if symlast.pointee == UInt8(ascii: ascii) {
+                symlast = symlast.advanced(by: inc)
+                return true
+            }
+            return false
+        }
+
         return
-            symlast.match(ascii: "C") ||
-            symlast.match(ascii: "D") && symlast.match(ascii: "f") ||
+            match(ascii: "C") ||
+            match(ascii: "D") && match(ascii: "f") ||
             // static/class methods, getters, setters
-            (symlast.match(ascii: "Z") || true) &&
-                (symlast.match(ascii: "F") && !symlast.match(ascii: "M") ||
-                 symlast.match(ascii: "g") ||
-                 symlast.match(ascii: "s")) ||
+            (match(ascii: "Z") || true) &&
+                (match(ascii: "F") && !match(ascii: "M") ||
+                 match(ascii: "g") || match(ascii: "s")) ||
             // async [class] functions
-            symlast.match(ascii: "u") && (
-                symlast.match(ascii: "T") &&
-                (symlast.match(ascii: "Z") || true) &&
-                symlast.match(ascii: "F") ||
+            match(ascii: "u") && ( match(ascii: "T") &&
+                (match(ascii: "Z") || true) && match(ascii: "F") ||
                 // "Mutable Addressors"
                 !preserveStatics &&
-                symlast.match(ascii: "a") &&
-                symlast.match(ascii: "v")) ||
-            symlast.match(ascii: "M") &&
-            symlast.match(ascii: "v")
-    }
-}
-
-private extension UnsafePointer where Pointee == CChar {
-    @inline(__always)
-    mutating func match(ascii: UnicodeScalar, inc: Int = -1) -> Bool {
-        if pointee == UInt8(ascii: ascii) {
-            self = self.advanced(by: inc)
-            return true
-        }
-        return false
+                match(ascii: "a") && match(ascii: "v")) ||
+            match(ascii: "M") && match(ascii: "v")
     }
 }
 #endif
