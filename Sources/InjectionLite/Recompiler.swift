@@ -52,9 +52,9 @@ struct Recompiler {
         injectionNumber += 1
         let objectFile = tmpbase+".o"
         try? FileManager.default.removeItem(atPath: objectFile)
-        let compiling = popen(command+" -o \(objectFile)", "w")
-        guard pclose(compiling) >> 8 == EXIT_SUCCESS else {
+        if let errors = Popen.system(command+" -o \(objectFile)", errors: true) {
             detail("Processed: "+command+" -o \(objectFile)")
+            print(errors)
             log("⚠️ Recompilation failed")
             return nil
         }
@@ -63,7 +63,23 @@ struct Recompiler {
             longTermCache[source] = command
             writeToCache()
         }
-        return link(objectFile: objectFile, command)
+        guard let dylib = link(objectFile: objectFile, command) else {
+            return nil
+        }
+        #if os(tvOS)
+        let codesign = """
+            (export CODESIGN_ALLOCATE=\"\(xcodeDev
+             )/Toolchains/XcodeDefault.xctoolchain/usr/bin/codesign_allocate\"; \
+            if /usr/bin/file \"\(dylib)\" | /usr/bin/grep ' shared library ' >/dev/null; \
+            then /usr/bin/codesign --force -s - \"\(dylib)\";\
+            else exit 1; fi)
+            """
+        if let error = Popen.system(codesign, errors: true) {
+            print(error)
+            log("⚠️ Codesign failed \(codesign)")
+        }
+        #endif
+        return dylib
     }
 
     mutating func writeToCache() {
@@ -141,14 +157,12 @@ struct Recompiler {
                 -undefined dynamic_lookup -dead_strip -Xlinker -objc_abi_version \
                 -Xlinker 2 -Xlinker -interposable -fobjc-arc \
                 -fprofile-instr-generate \(objectFile) -L "\(frameworks)" -F "\(frameworks)" \
-                -rpath "\(frameworks)" -o \"\(dylib)\" 2>&1
+                -rpath "\(frameworks)" -o \"\(dylib)\"
             """.replacingOccurrences(of: "__PLATFORM__", with: sdk)
 
-        let linking = popen(linkCommand, "r")
-        let errs = linking?.readAll() ?? ""
-        let status = pclose(linking)
-        guard status >> 8 == EXIT_SUCCESS else {
-            log("⚠️ Linking failed \(status)\n"+errs)
+        if let errors = Popen.system(linkCommand, errors: true) {
+            print(errors)
+            log("⚠️ Linking failed")
             return nil
         }
 
