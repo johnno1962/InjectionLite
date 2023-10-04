@@ -17,18 +17,18 @@ import Popen
 struct Recompiler {
 
     /// A cache is kept of compiltaion commands in /tmp as Xcode housekeeps logs.
-    let appName = Bundle.main.executableURL?.lastPathComponent ?? "unknown"
+    static let appName = Bundle.main.executableURL?.lastPathComponent ?? "unknown"
     #if os(macOS) || targetEnvironment(macCatalyst)
-    let sdk = "macOS"
+    static let sdk = "macOS"
     #elseif os(tvOS)
-    let sdk = "tvOS"
+    static let sdk = "tvOS"
     #elseif targetEnvironment(simulator)
-    let sdk = "iOS"
+    static let sdk = "iOS"
     #else
-    let sdk = "maciOS"
+    static let sdk = "maciOS"
     #endif
-    lazy var cacheFile = "/tmp/\(appName)_\(sdk)_builds.plist"
-    lazy var longTermCache = NSMutableDictionary(contentsOfFile: cacheFile) ??
+    static var cacheFile = "/tmp/\(appName)_\(sdk)_builds.plist"
+    lazy var longTermCache = NSMutableDictionary(contentsOfFile: Self.cacheFile) ??
         NSMutableDictionary()
 
     let parser = LogParser()
@@ -83,7 +83,7 @@ struct Recompiler {
     }
 
     mutating func writeToCache() {
-        longTermCache.write(toFile: cacheFile,
+        longTermCache.write(toFile: Self.cacheFile,
                             atomically: true)
     }
 

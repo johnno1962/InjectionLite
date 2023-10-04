@@ -38,18 +38,7 @@ struct Reloader {
                     .compactMap { $0.value }) {
             let newClass: AnyClass = autoBitCast(aClass)
             injectedGenerics.remove(_typeName(newClass))
-            var oldClass: AnyClass? = objc_getClass(
-                class_getName(newClass)) as? AnyClass
-            if oldClass == nil {
-                var info = Dl_info()
-                if dladdr(autoBitCast(newClass), &info) != 0,
-                   let symbol = info.dli_sname,
-                   let mainClass = dlsym(DLKit.RTLD_MAIN_ONLY, symbol) {
-                    oldClass = autoBitCast(mainClass)
-                }
-            }
-
-            if let oldClass = oldClass {
+            for oldClass in versions(of: newClass) {
                 patchSwift(oldClass: oldClass, from: newClass, in: image)
                 if inheritedGeneric(anyType: oldClass) {
                     swizzleBasics(oldClass: oldClass, in: image)
@@ -79,6 +68,22 @@ struct Reloader {
         return false
     }
 
+    /// Scan class list for previous versions of a class
+    func versions(of aClass: AnyClass) -> [AnyClass] {
+        var out = [AnyClass](), nc: UInt32 = 0
+        if let classes = UnsafePointer(objc_copyClassList(&nc)) {
+            let named = _typeName(aClass)
+            for i in 0 ..< Int(nc) {
+                if class_getSuperclass(classes[i]) != nil && classes[i] != aClass,
+                   _typeName(classes[i]) == named {
+                    out.append(classes[i])
+                }
+            }
+            free(UnsafeMutableRawPointer(mutating: classes))
+        }
+        return out
+    }
+
     /// Extract pointers to class vtables in class meta-data
     func iterate(oldClass: AnyClass, newClass: AnyClass,
                  patcher: (_ slots: Int,
@@ -96,7 +101,15 @@ struct Reloader {
 
         guard newSwiftCondition || oldSwiftCondition else { return }
 
-        if classMetadata.pointee.ClassSize != existingClass.pointee.ClassSize {
+        if classMetadata.pointee.ClassAddressPoint !=
+            existingClass.pointee.ClassAddressPoint {
+            log("""
+                ⚠️ Mixing Xcode versions across injection. This may work \
+                but "Clean Build Folder" when switching Xcode versions. \
+                To clear the cache: rm \(Recompiler.cacheFile)
+                """)
+        } else if classMetadata.pointee.ClassSize !=
+                    existingClass.pointee.ClassSize {
             log("""
                 ⚠️ Adding or [re]moving methods of non-final classes is not supported. \
                 Your application will likely crash. Paradoxically, you can avoid this by \
