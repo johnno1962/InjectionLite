@@ -43,7 +43,7 @@ struct Recompiler {
         guard let command = longTermCache[source] as? String ??
                 parser.command(for: source) else {
             log("⚠️ Could not locate command for " + source +
-                ". Injection is not compatible with \"Whole Module\" Compilation Mode")
+                ". Injection is not compatible with \"Whole Module\" Compilation Mode. Edit a file and rebuild your project.")
             return nil
         }
 
