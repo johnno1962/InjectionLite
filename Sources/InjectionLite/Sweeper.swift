@@ -9,6 +9,7 @@
 //  Created by John Holdsworth on 25/02/2023.
 //
 #if DEBUG
+import InjectionLiteC
 import Foundation
 import DLKit
 

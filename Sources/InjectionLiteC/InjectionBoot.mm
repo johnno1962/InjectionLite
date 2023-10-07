@@ -9,7 +9,7 @@
 //
 
 #import "InjectionLiteC.h"
-#import <XCTest/XCTestSuite.h>
+#import <XCTest/XCTest.h>
 #import <objc/runtime.h>
 
 @interface InjectionLite: NSObject
@@ -31,6 +31,9 @@
     XCTestSuiteRun *tr = [_XCTestSuiteRun testRunWithTest: suite];
     [suite0 addTest:suite];
     [suite0 performTest:tr];
+    if (NSUInteger failed = tr.totalFailureCount)
+        printf("\n" APP_PREFIX"*** %lu/%lu tests have FAILED ***\n",
+               failed, tr.testCaseCount);
 }
 
 @end

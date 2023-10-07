@@ -13,7 +13,6 @@ import InjectionLiteC
 import Foundation
 import DLKit
 
-let APP_PREFIX = "🔥 ", APP_NAME = "InjectionLite"
 func log(_ what: Any...) {
     print(APP_PREFIX+what.map {"\($0)"}.joined(separator: " "))
 }
@@ -36,24 +35,49 @@ public class InjectionLite: NSObject {
     var recompiler = Recompiler()
     var reloader = Reloader()
     let notification = Notification.Name("INJECTION_BUNDLE_NOTIFICATION")
+    let injectionQueue = dlsym(RTLD_DEFAULT, VAPOUR_SYMBOL) != nil ?
+        DispatchQueue(label: "InjectionQueue") : DispatchQueue.main
 
     /// Called from InjectionBoot.m, setup filewatch and wait...
     public override init() {
         super.init()
+        injectionQueue.async {
+            self.performInjection()
+        }
+    }
+
+    func performInjection() {
         #if !targetEnvironment(simulator) && !os(macOS)
         #warning("InjectionLite can only be used in the simulator or unsandboxed macOS")
         log(APP_NAME+": can only be used in the simulator or unsandboxed macOS")
         #endif
         DLKit.logger = { log($0) }
         let home = NSHomeDirectory()
-            .replacingOccurrences(of: #"(/Users/[^/]+).*"#, with: "$1",
-            options: .regularExpression)
-        watcher = FileWatcher(roots: [home], callback: { filesChanged in
+            .replacingOccurrences(of: #"(/Users/[^/]+).*"#,
+                                  with: "$1", options: .regularExpression)
+        var dirs = [home]
+        let library = home+"/Library"
+        if let extra = getenv("INJECTION_DIRECTORIES") {
+            dirs = String(cString: extra).components(separatedBy: ",")
+                .map { $0.replacingOccurrences(of: #"^~"#,
+                   with: home, options: .regularExpression) } // expand ~ in paths
+            if FileWatcher.derivedLog == nil && dirs.allSatisfy({
+                $0 != home && !$0.hasPrefix(library) }) {
+                log("⚠️ INJECTION_DIRECTORIES should contain ~/Library")
+                dirs.append(library)
+            }
+        }
+
+        let isVapor = injectionQueue != .main
+        watcher = FileWatcher(roots: dirs, callback: { filesChanged in
             for file in filesChanged {
                 self.inject(source: file)
             }
-        })
+        }, runLoop: isVapor ? CFRunLoopGetCurrent() : nil)
         log(APP_NAME+": Watching for source changes under \(home)/...")
+        if isVapor {
+            CFRunLoopRun()
+        }
     }
 
     func inject(source: String) {

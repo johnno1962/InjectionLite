@@ -40,7 +40,8 @@ public class FileWatcher: NSObject {
     var callback: InjectionCallback
     var context = FSEventStreamContext()
 
-    @objc public init(roots: [String], callback: @escaping InjectionCallback) {
+    @objc public init(roots: [String], callback: @escaping InjectionCallback,
+                      runLoop: CFRunLoop? = nil) {
         self.callback = callback
         super.init()
         #if os(macOS)
@@ -70,6 +71,9 @@ public class FileWatcher: NSObject {
                      let flag = Int(eventFlags[i])
                      if (flag & (kFSEventStreamEventFlagItemRenamed | kFSEventStreamEventFlagItemModified)) != 0 {
                         let changes = unsafeBitCast(eventPaths, to: NSArray.self)
+                         if CFRunLoopGetCurrent() != CFRunLoopGetMain() {
+                             return watcher.filesChanged(changes: changes)
+                         }
                          DispatchQueue.main.async {
                              watcher.filesChanged(changes: changes)
                          }
@@ -83,7 +87,7 @@ public class FileWatcher: NSObject {
         #if !os(macOS)
         watchers[fileEvents] = self
         #endif
-        FSEventStreamScheduleWithRunLoop(fileEvents, CFRunLoopGetMain(),
+        FSEventStreamScheduleWithRunLoop(fileEvents, runLoop ?? CFRunLoopGetMain(),
                                          "kCFRunLoopDefaultMode" as CFString)
         _ = FSEventStreamStart(fileEvents)
         self.fileEvents = fileEvents
@@ -137,6 +141,7 @@ public class FileWatcher: NSObject {
     #endif
 }
 
+let RTLD_DEFAULT = UnsafeMutableRawPointer(bitPattern: -2)
 #if !os(macOS) // Yes, this api is available inside the simulator...
 typealias FSEventStreamRef = OpaquePointer
 typealias ConstFSEventStreamRef = OpaquePointer
@@ -154,7 +159,6 @@ typealias FSEventStreamEventFlags = UInt32
 typealias FSEventStreamCallback = @convention(c) (ConstFSEventStreamRef, UnsafeMutableRawPointer?, Int, UnsafeMutableRawPointer, UnsafePointer<FSEventStreamEventFlags>, UnsafePointer<FSEventStreamEventId>) -> Void
 
 #if true // avoid linker flags -undefined dynamic_lookup
-let RTLD_DEFAULT = UnsafeMutableRawPointer(bitPattern: -2)
 let FSEventStreamCreate = unsafeBitCast(dlsym(RTLD_DEFAULT, "FSEventStreamCreate"), to: (@convention(c) (_ allocator: CFAllocator?, _ callback: FSEventStreamCallback, _ context: UnsafeMutableRawPointer?, _ pathsToWatch: CFArray, _ sinceWhen: FSEventStreamEventId, _ latency: CFTimeInterval, _ flags: FSEventStreamCreateFlags) -> FSEventStreamRef?)?.self)
 let FSEventStreamScheduleWithRunLoop = unsafeBitCast(dlsym(RTLD_DEFAULT, "FSEventStreamScheduleWithRunLoop"), to: (@convention(c) (_ streamRef: FSEventStreamRef, _ runLoop: CFRunLoop, _ runLoopMode: CFString) -> Void).self)
 let FSEventStreamStart = unsafeBitCast(dlsym(RTLD_DEFAULT, "FSEventStreamStart"), to: (@convention(c) (_ streamRef: FSEventStreamRef) -> Bool).self)
