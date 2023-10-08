@@ -13,10 +13,12 @@ import InjectionLiteC
 import Foundation
 import DLKit
 
-#if os(iOS) || os(tvOS)
-import UIKit
-#else
+#if os(macOS)
 import AppKit
+typealias OSApplication = NSApplication
+#else
+import UIKit
+typealias OSApplication = UIApplication
 #endif
 
 @objc public protocol SwiftInjected {
@@ -154,11 +156,7 @@ extension Reloader {
 class SwiftSweeper {
 
     /// Seeds for the start of the "sweep" to implement instance level injected() method.
-    #if os(iOS) || os(tvOS)
-    static let app = UIApplication.shared
-    #else
-    static let app = NSApplication.shared
-    #endif
+    static let app = OSApplication.shared
     static var seeds: [Any] = [app.delegate as Any] + app.windows
     static var current: SwiftSweeper?
 

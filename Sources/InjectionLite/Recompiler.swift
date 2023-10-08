@@ -142,6 +142,8 @@ struct Recompiler {
                 .replacingOccurrences(of: #"^.*( -target \S+).*$"#,
                                       with: "$1", options: .regularExpression)
             osSpecific = "-mmacosx-version-min=10.11"+target
+        case "XRSimulator": fallthrough case "XROS":
+            osSpecific = ""
         default:
             _ = evalError("Invalid platform \(platform)")
             // -Xlinker -bundle_loader -Xlinker \"\(Bundle.main.executablePath!)\""

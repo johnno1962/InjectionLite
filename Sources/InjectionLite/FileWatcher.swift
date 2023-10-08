@@ -120,7 +120,7 @@ public class FileWatcher: NSObject {
 
             if Self.INJECTABLE_PATTERN.firstMatch(in: path, range:
                         NSMakeRange(0, path.utf16.count)) != nil  &&
-                path.range(of: "DerivedData/|InjectionProject/|.DocumentRevisions-|main.mm?$",
+                path.range(of: "DerivedData/|InjectionProject/|.DocumentRevisions-|@__swiftmacro_|main.mm?$",
                             options:.regularExpression) == nil &&
                 FileManager.default.fileExists(atPath: path as String) {
                 changed.insert(path)

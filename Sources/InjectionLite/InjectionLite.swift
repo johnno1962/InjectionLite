@@ -100,7 +100,8 @@ public class InjectionLite: NSObject {
 
             reloader.performSweep(oldClasses: classes, generics, image: image)
             NotificationCenter.default.post(name: notification, object: classes)
-            log("Loaded and rebound \(rebound.count) symbols \(classes)")
+            let symbols = Set(rebound.map { String(cString: $0) })
+            log("Loaded and rebound \(symbols.count) symbols \(classes)")
 
             if let XCTestCase = objc_getClass("XCTestCase") as? AnyClass {
                 for test in classes where isSubclass(test, of: XCTestCase) {
