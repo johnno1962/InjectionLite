@@ -115,7 +115,7 @@ public class FileWatcher: NSObject {
                 path.contains("/Logs/Build/") {
                 Self.derivedLog = path
             }
-            if eventId < eventsStart { continue }
+            if eventId <= eventsStart { continue }
             #endif
 
             if Self.INJECTABLE_PATTERN.firstMatch(in: path, range:
