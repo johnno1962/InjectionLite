@@ -8,6 +8,7 @@
 //
 //  Created by John Holdsworth on 25/02/2023.
 //
+
 #if DEBUG
 import InjectionLiteC
 import Foundation
@@ -35,8 +36,8 @@ public class InjectionLite: NSObject {
     var recompiler = Recompiler()
     var reloader = Reloader()
     let notification = Notification.Name("INJECTION_BUNDLE_NOTIFICATION")
-    let injectionQueue = dlsym(RTLD_DEFAULT, VAPOUR_SYMBOL) != nil ?
-        DispatchQueue(label: "InjectionQueue") : DispatchQueue.main
+    let injectionQueue = dlsym(RTLD_DEFAULT, VAPOR_SYMBOL) != nil ?
+        DispatchQueue(label: "InjectionQueue") : .main
 
     /// Called from InjectionBoot.m, setup filewatch and wait...
     public override init() {
@@ -81,11 +82,9 @@ public class InjectionLite: NSObject {
     }
 
     func inject(source: String) {
-        let isTest = source.replacingOccurrences(of: #"Tests?\."#,
-            with: "-", options: .regularExpression) != source
         let usingCached = recompiler.longTermCache[source] != nil
         if let dylib = recompiler.recompile(source: source),
-           isTest ? loadXCTest : true,
+           notXCTest(in: dylib) || loadXCTest,
            let image = DLKit.load(dylib: dylib) {
             let (classes, generics) = reloader.patchClasses(in: image)
             if classes.count != 0 {
@@ -125,6 +124,13 @@ public class InjectionLite: NSObject {
             subClass = class_getSuperclass(subClass)
         } while subClass != nil
         return false
+    }
+
+    func notXCTest(in dylib:String) -> Bool {
+        if let object = NSData(contentsOfFile: dylib),
+           memmem(object.bytes, object.count, "XCTest", 6) != nil,
+           object.count != 0 { return false }
+        return true
     }
 
     lazy var loadXCTest: Bool = {

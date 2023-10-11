@@ -10,7 +10,9 @@
 //
 //  Created by John Holdsworth on 25/02/2023.
 //
+
 #if DEBUG
+import InjectionLiteC
 import Foundation
 import Popen
 
@@ -42,8 +44,12 @@ struct Recompiler {
     mutating func recompile(source: String) -> String? {
         guard let command = longTermCache[source] as? String ??
                 parser.command(for: source) else {
-            log("⚠️ Could not locate command for " + source +
-                ". Injection is not compatible with \"Whole Module\" Compilation Mode. Edit a file and rebuild your project.")
+            log("""
+                ⚠️ Could not locate command for \(source). \
+                Try editing a file and rebuilding your project. \
+                \(APP_NAME) is not compatible with \"Whole Module\" \
+                Compilation Mode.
+                """)
             return nil
         }
 
