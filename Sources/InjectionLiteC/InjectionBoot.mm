@@ -7,7 +7,7 @@
 // 
 //  Created by John Holdsworth on 25/02/2023.
 //
-
+#if DEBUG
 #import "InjectionLiteC.h"
 #import <XCTest/XCTest.h>
 #import <objc/runtime.h>
@@ -37,3 +37,4 @@
 }
 
 @end
+#endif

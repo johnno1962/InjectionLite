@@ -3,7 +3,7 @@
 //
 //  Created by John Holdsworth on 13/03/2023.
 //
-
+#if DEBUG
 #import <Foundation/Foundation.h>
 #define APP_NAME "InjectionLite"
 #define APP_PREFIX "🔥 "
@@ -12,3 +12,4 @@
 @interface NSObject(InjectionBoot)
 + (void)runXCTestCase:(Class)aTestCase;
 @end
+#endif
