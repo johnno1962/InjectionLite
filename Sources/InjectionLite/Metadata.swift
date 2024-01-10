@@ -4,7 +4,7 @@
 //
 //  Created by John Holdsworth on 11/09/2023.
 //
-
+#if DEBUG
 import Foundation
 
 extension Reloader {
@@ -67,3 +67,4 @@ extension Reloader {
     }
 
 }
+#endif
