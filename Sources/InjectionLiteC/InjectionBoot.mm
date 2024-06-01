@@ -11,6 +11,7 @@
 #import "InjectionLiteC.h"
 #import <XCTest/XCTest.h>
 #import <objc/runtime.h>
+#import <dlfcn.h>
 
 @interface InjectionLite: NSObject
 @end
@@ -19,7 +20,15 @@
 
 /// This will be called as soon as the package is loaded into memory.
 + (void)load {
+    typedef void (*HKP)();
+    if (getenv("INJECTION_KEYPATHS") ||
+        dlsym(RTLD_DEFAULT, "$s22ComposableArchitecture6LoggerCN"))
+        #if SWIFT_PACKAGE
+        if (HKP hookKeyPaths = (HKP)dlsym(RTLD_DEFAULT, "hookKeyPaths"))
+        #endif
+            hookKeyPaths();
     static InjectionLite *singleton;
+    if (objc_getClass("InjectionNext")) return;
     singleton = [[InjectionLite alloc] init];
 }
 

@@ -125,7 +125,7 @@ extension Reloader {
                 let demangled = symname.demangled ?? symbol
 
                 guard let replacement = lastLoaded[symname] ??
-                        interposed[symbol] ?? DLKit.allImages[symname] else {
+                    Self.interposed[symbol] ?? DLKit.allImages[symname] else {
                     log("⚠️ Class patching failed to lookup \(demangled)")
                     continue
                 }

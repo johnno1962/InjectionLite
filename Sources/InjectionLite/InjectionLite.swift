@@ -30,18 +30,40 @@ public class InjectionClient: NSObject {
 }
 
 @objc(InjectionLite)
-public class InjectionLite: NSObject {
+open class InjectionLite: NSObject {
 
     var watcher: FileWatcher?
     var recompiler = Recompiler()
     var reloader = Reloader()
     let notification = Notification.Name("INJECTION_BUNDLE_NOTIFICATION")
-    let injectionQueue = dlsym(RTLD_DEFAULT, VAPOR_SYMBOL) != nil ?
+    public let injectionQueue = dlsym(RTLD_DEFAULT, VAPOR_SYMBOL) != nil ?
         DispatchQueue(label: "InjectionQueue") : .main
 
-    /// Called from InjectionBoot.m, setup filewatch and wait...
-    public override init() {
+    open class func detail(_ msg: @autoclosure () -> String) {
+        if getenv("INJECTION_DETAIL") != nil {
+            log(msg())
+        }
+    }
+    open class func log(_ what: Any...) {
+        let msg = what.map {"\($0)"}.joined(separator: " ")
+        print(APP_PREFIX+msg)
+        if msg.contains("symbol not found") {
+            print("""
+            ℹ️ Symbol not found during load. Unfortunately it is not possible \
+            to inject code that uses a default argument when calling a function. \
+            Make the value explicit and this should work.
+            """)
+        }
+    }
+
+    public init(passive: Bool) {
+        DLKit.logger = { Self.log($0) }
         super.init()
+    }
+
+    /// Called from InjectionBoot.m, setup filewatch and wait...
+    public convenience override init() {
+        self.init(passive: false)
         injectionQueue.async {
             self.performInjection()
         }
@@ -49,10 +71,8 @@ public class InjectionLite: NSObject {
 
     func performInjection() {
         #if !targetEnvironment(simulator) && !os(macOS)
-        #warning("InjectionLite can only be used in the simulator or unsandboxed macOS")
-        log(APP_NAME+": can only be used in the simulator or unsandboxed macOS")
+        Self.log(APP_NAME+": can only be used in the simulator or unsandboxed macOS")
         #endif
-        DLKit.logger = { log($0) }
         let home = NSHomeDirectory()
             .replacingOccurrences(of: #"(/Users/[^/]+).*"#,
                                   with: "$1", options: .regularExpression)
@@ -64,7 +84,7 @@ public class InjectionLite: NSObject {
                    with: home, options: .regularExpression) } // expand ~ in paths
             if FileWatcher.derivedLog == nil && dirs.allSatisfy({
                 $0 != home && !$0.hasPrefix(library) }) {
-                log("⚠️ INJECTION_DIRECTORIES should contain ~/Library")
+                Self.log("⚠️ INJECTION_DIRECTORIES should contain ~/Library")
                 dirs.append(library)
             }
         }
@@ -75,7 +95,7 @@ public class InjectionLite: NSObject {
                 self.inject(source: file)
             }
         }, runLoop: isVapor ? CFRunLoopGetCurrent() : nil)
-        log(APP_NAME+": Watching for source changes under \(home)/...")
+        Self.log(APP_NAME+": Watching for source changes under \(home)/...")
         if isVapor {
             CFRunLoopRun()
         }
@@ -84,35 +104,44 @@ public class InjectionLite: NSObject {
     func inject(source: String) {
         let usingCached = recompiler.longTermCache[source] != nil
         if let dylib = recompiler.recompile(source: source),
-           notXCTest(in: dylib) || loadXCTest,
-           let image = DLKit.load(dylib: dylib) {
-            let (classes, generics) = reloader.patchClasses(in: image)
-            if classes.count != 0 {
-                log("Ignore messages about duplicate classes ⬆️")
-            }
-
-            let rebound = reloader.interposeSymbols(in: image)
-            if classes.count == 0 && rebound.count == 0 &&
-                image.entries(withPrefix: "_OBJC_$_CATEGORY_").count == 0 {
-                log("ℹ️ No symbols replaced, have you added -Xlinker -interposable to your project's \"Other Linker Flags\"?")
-            }
-
-            reloader.performSweep(oldClasses: classes, generics, image: image)
-            NotificationCenter.default.post(name: notification, object: classes)
-            let symbols = Set(rebound.map { String(cString: $0) })
-            log("Loaded and rebound \(symbols.count) symbols \(classes)")
-
-            if let XCTestCase = objc_getClass("XCTestCase") as? AnyClass {
-                for test in classes where isSubclass(test, of: XCTestCase) {
-                    print("\n\(APP_PREFIX)Running test \(test)")
-                    NSObject.runXCTestCase(test)
-                }
-            }
+           loadAndPatchIn(dylib: dylib) {
         } else if usingCached {
             recompiler.longTermCache.removeObject(forKey: source)
             recompiler.writeToCache()
             inject(source: source)
         }
+    }
+    
+    open func loadAndPatchIn(dylib: String) -> Bool {
+        guard notXCTest(in: dylib) || loadXCTest,
+              let image = DLKit.load(dylib: dylib) else { return false }
+        
+        let (classes, generics) = reloader.patchClasses(in: image)
+        if classes.count != 0 {
+            Self.log("Ignore messages about duplicate classes ⬆️")
+        }
+        
+        let rebound = reloader.interposeSymbols(in: image)
+        if classes.count == 0 && rebound.count == 0 &&
+            image.entries(withPrefix: "_OBJC_$_CATEGORY_").count == 0 {
+            Self.log("ℹ️ No symbols replaced, have you added -Xlinker -interposable to your project's \"Other Linker Flags\"?")
+        }
+        
+        DispatchQueue.main.async {
+            self.reloader.performSweep(oldClasses: classes, generics, image: image)
+            NotificationCenter.default.post(name: self.notification, object: classes)
+            let symbols = Set(rebound.map { String(cString: $0) })
+            Self.log("Loaded and rebound \(symbols.count) symbols \(classes)")
+            
+            if let XCTestCase = objc_getClass("XCTestCase") as? AnyClass {
+                for test in classes where self.isSubclass(test, of: XCTestCase) {
+                    print("\n\(APP_PREFIX)Running test \(test)")
+                    NSObject.runXCTestCase(test)
+                }
+            }
+        }
+        
+        return true
     }
 
     open func isSubclass(_ subClass: AnyClass, of aClass: AnyClass) -> Bool {

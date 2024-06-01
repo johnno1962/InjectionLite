@@ -135,13 +135,14 @@ struct Reloader {
                     guard let impl = newSlots[slot] else { continue }
                     let lastInfo = lastLoaded[impl]
                     if let info = lastInfo ?? DLKit.allImages[impl],
-                       Self.injectableSymbol(info.name) {
+                       let name = info.name,
+                       Self.injectableSymbol(name) {
                         if lastInfo == nil, let injectedSuper =
-                            interposed[String(cString: info.name)] {
+                            Self.interposed[String(cString: name)] {
                             newSlots[slot] = injectedSuper
                         }
-                        let symbol = info.name.demangled ??
-                                 String(cString: info.name)
+                        let symbol = name.demangled ??
+                                 String(cString: name)
                         if symbol.contains(".getter : ") &&
                             symbol.hasSuffix(">") &&
                             !symbol.contains(".Optional<__C.") { continue }
@@ -199,7 +200,7 @@ struct Reloader {
         return 0
     }
 
-    var interposed = [String: UnsafeMutableRawPointer]()
+    static var interposed = [String: UnsafeMutableRawPointer]()
 
     /// Rebind "injectable" symbols in the app to the new implementations just loaded
     mutating func interposeSymbols(in image: ImageSymbols) -> [DLKit.SymbolName] {
@@ -212,7 +213,7 @@ struct Reloader {
             detail("Interposing \(value) "+(entry.name.demangled ?? symbol))
             names.append(entry.name)
             impls.append(value)
-            interposed[symbol] = value
+            Self.interposed[symbol] = value
         }
 
         // apply interposes using "fishhook"
@@ -220,8 +221,8 @@ struct Reloader {
 
         // Apply previous interposes
         // to the newly loaded image
-        _ = image.rebind(symbols: Array(interposed.keys),
-                         values: Array(interposed.values))
+        _ = image.rebind(symbols: Array(Self.interposed.keys),
+                         values: Array(Self.interposed.values))
         return rebound
     }
 

@@ -16,7 +16,7 @@ import InjectionLiteC
 import Foundation
 import Popen
 
-struct Recompiler {
+public struct Recompiler {
 
     /// A cache is kept of compiltaion commands in /tmp as Xcode housekeeps logs.
     static let appName = Bundle.main.executableURL?.lastPathComponent ?? "unknown"
@@ -24,20 +24,22 @@ struct Recompiler {
     static let sdk = "macOS"
     #elseif os(tvOS)
     static let sdk = "tvOS"
+    #elseif os(xrOS)
+    static let sdk = "xrOS"
     #elseif targetEnvironment(simulator)
     static let sdk = "iOS"
     #else
     static let sdk = "maciOS"
     #endif
+    public static var injectionNumber = 0
     static var cacheFile = "/tmp/\(appName)_\(sdk)_builds.plist"
     lazy var longTermCache = NSMutableDictionary(contentsOfFile: Self.cacheFile) ??
         NSMutableDictionary()
 
     let parser = LogParser()
     let tmpdir = NSTemporaryDirectory()
-    var injectionNumber = 0
     var tmpbase: String {
-        return tmpdir+"eval\(injectionNumber)"
+        return tmpdir+"eval\(Self.injectionNumber)"
     }
 
     /// Recompile a source to produce a dynamic library that can be loaded
@@ -55,7 +57,7 @@ struct Recompiler {
 
         log("Recompiling \(source)")
 
-        injectionNumber += 1
+        Self.injectionNumber += 1
         let objectFile = tmpbase+".o"
         try? FileManager.default.removeItem(atPath: objectFile)
         if let errors = Popen.system(command+" -o \(objectFile)", errors: true) {
