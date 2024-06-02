@@ -12,14 +12,14 @@
 #if DEBUG
 import InjectionLiteC
 import Foundation
+import SwiftRegex
 import DLKit
 
 func log(_ what: Any...) {
     print(APP_PREFIX+what.map {"\($0)"}.joined(separator: " "))
 }
-let showDetail = getenv("INJECTION_DETAIL") != nil
 func detail(_ str: @autoclosure () -> String) {
-    if showDetail {
+    if getenv("INJECTION_DETAIL") != nil {
         log(str())
     }
 }
@@ -39,25 +39,18 @@ open class InjectionLite: NSObject {
     public let injectionQueue = dlsym(RTLD_DEFAULT, VAPOR_SYMBOL) != nil ?
         DispatchQueue(label: "InjectionQueue") : .main
 
-    open class func detail(_ msg: @autoclosure () -> String) {
-        if getenv("INJECTION_DETAIL") != nil {
-            log(msg())
-        }
-    }
-    open class func log(_ what: Any...) {
-        let msg = what.map {"\($0)"}.joined(separator: " ")
-        print(APP_PREFIX+msg)
-        if msg.contains("symbol not found") {
-            print("""
-            ℹ️ Symbol not found during load. Unfortunately it is not possible \
-            to inject code that uses a default argument when calling a function. \
-            Make the value explicit and this should work.
-            """)
-        }
-    }
-
     public init(passive: Bool) {
-        DLKit.logger = { Self.log($0) }
+        DLKit.logger = { msg in
+            log(msg)
+            if let symbol: String = msg[#"symbol not found in flat namespace '(.*A\d*_)'"#] {
+                log("""
+                ℹ️ Symbol not found during load. Unfortunately, sometimes it is \
+                not possible to inject code that implies a default argument when \
+                calling a function. Make the value explicit and this should work. \
+                The argument omitted was: \(symbol.swiftDemangle ?? symbol).
+                """)
+            }
+        }
         super.init()
     }
 
@@ -71,7 +64,7 @@ open class InjectionLite: NSObject {
 
     func performInjection() {
         #if !targetEnvironment(simulator) && !os(macOS)
-        Self.log(APP_NAME+": can only be used in the simulator or unsandboxed macOS")
+        log(APP_NAME+": can only be used in the simulator or unsandboxed macOS")
         #endif
         let home = NSHomeDirectory()
             .replacingOccurrences(of: #"(/Users/[^/]+).*"#,
@@ -84,7 +77,7 @@ open class InjectionLite: NSObject {
                    with: home, options: .regularExpression) } // expand ~ in paths
             if FileWatcher.derivedLog == nil && dirs.allSatisfy({
                 $0 != home && !$0.hasPrefix(library) }) {
-                Self.log("⚠️ INJECTION_DIRECTORIES should contain ~/Library")
+                log("⚠️ INJECTION_DIRECTORIES should contain ~/Library")
                 dirs.append(library)
             }
         }
@@ -95,7 +88,7 @@ open class InjectionLite: NSObject {
                 self.inject(source: file)
             }
         }, runLoop: isVapor ? CFRunLoopGetCurrent() : nil)
-        Self.log(APP_NAME+": Watching for source changes under \(home)/...")
+        log(APP_NAME+": Watching for source changes under \(home)/...")
         if isVapor {
             CFRunLoopRun()
         }
@@ -104,7 +97,7 @@ open class InjectionLite: NSObject {
     func inject(source: String) {
         let usingCached = recompiler.longTermCache[source] != nil
         if let dylib = recompiler.recompile(source: source),
-           loadAndPatchIn(dylib: dylib) {
+           loadAndPatch(in: dylib) {
         } else if usingCached {
             recompiler.longTermCache.removeObject(forKey: source)
             recompiler.writeToCache()
@@ -112,26 +105,26 @@ open class InjectionLite: NSObject {
         }
     }
     
-    open func loadAndPatchIn(dylib: String) -> Bool {
+    open func loadAndPatch(in dylib: String) -> Bool {
         guard notXCTest(in: dylib) || loadXCTest,
               let image = DLKit.load(dylib: dylib) else { return false }
         
         let (classes, generics) = reloader.patchClasses(in: image)
         if classes.count != 0 {
-            Self.log("Ignore messages about duplicate classes ⬆️")
+            log("Ignore messages about duplicate classes ⬆️")
         }
         
         let rebound = reloader.interposeSymbols(in: image)
         if classes.count == 0 && rebound.count == 0 &&
             image.entries(withPrefix: "_OBJC_$_CATEGORY_").count == 0 {
-            Self.log("ℹ️ No symbols replaced, have you added -Xlinker -interposable to your project's \"Other Linker Flags\"?")
+            log("ℹ️ No symbols replaced, have you added -Xlinker -interposable to your project's \"Other Linker Flags\"?")
         }
         
         DispatchQueue.main.async {
             self.reloader.performSweep(oldClasses: classes, generics, image: image)
             NotificationCenter.default.post(name: self.notification, object: classes)
             let symbols = Set(rebound.map { String(cString: $0) })
-            Self.log("Loaded and rebound \(symbols.count) symbols \(classes)")
+            log("Loaded and rebound \(symbols.count) symbols \(classes)")
             
             if let XCTestCase = objc_getClass("XCTestCase") as? AnyClass {
                 for test in classes where self.isSubclass(test, of: XCTestCase) {

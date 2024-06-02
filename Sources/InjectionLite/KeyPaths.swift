@@ -92,7 +92,7 @@ public func injection_getKeyPath(pattern: UnsafeMutableRawPointer,
         // extract cached keyPath or create
         let keyPath: UnsafeRawPointer
         if body.keyPathNumber < body.keyPaths.count && ViewBodyKeyPaths.hasInjected {
-            InjectionLite.detail("Recycling \(callerKey)\(body.keyPathNumber)")
+            detail("Recycling \(callerKey)\(body.keyPathNumber)")
             keyPath = body.keyPaths[body.keyPathNumber]
             body.recycled = true
         } else {
@@ -101,7 +101,7 @@ public func injection_getKeyPath(pattern: UnsafeMutableRawPointer,
                 body.keyPaths.append(keyPath)
             }
             if body.recycled {
-                InjectionLite.log("""
+                log("""
                     ⚠️ New key path expression introduced over injection. \
                     This will likely fail and you'll have to restart your \
                     application.

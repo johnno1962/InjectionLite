@@ -112,6 +112,8 @@ public struct Recompiler {
 
     #if arch(arm64)
     public var arch = "arm64"
+    #elseif arch(arm)
+    public var arch = "armv7"
     #elseif arch(x86_64)
     public var arch = "x86_64"
     #endif
