@@ -11,7 +11,7 @@
 //
 #if DEBUG
 import Foundation
-import Popen
+import PopenD
 
 struct LogParser {
 

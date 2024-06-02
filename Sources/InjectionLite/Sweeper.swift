@@ -11,7 +11,7 @@
 #if DEBUG
 import InjectionLiteC
 import Foundation
-import DLKit
+import DLKitD
 
 #if os(macOS)
 import AppKit

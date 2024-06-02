@@ -14,18 +14,21 @@ let package = Package(
     dependencies: [
         // Dependencies declare other packages that this package depends on.
         .package(url: "https://github.com/johnno1962/DLKit",
-                 .upToNextMajor(from: "3.2.3")),
+                 .upToNextMajor(from: "3.3.6")),
         .package(url: "https://github.com/johnno1962/Popen",
-                 .upToNextMajor(from: "2.1.3")),
+                 .upToNextMajor(from: "2.1.4")),
         .package(url: "https://github.com/johnno1962/SwiftRegex5",
-                 .upToNextMajor(from: "6.1.0")),
+                 .upToNextMajor(from: "6.1.1")),
     ],
     targets: [
         // Targets are the basic building blocks of a package. A target can define a module or a test suite.
         // Targets can depend on other targets in this package, and on products in packages this package depends on.
         .target(
             name: "InjectionLite",
-            dependencies: ["DLKit", "Popen", "InjectionLiteC", "SwiftRegex"]),
+            dependencies: [.product(name: "DLKitD", package: "DLKit"),
+                           .product(name: "PopenD", package: "Popen"),
+                           .product(name: "SwiftRegexD", package: "SwiftRegex"),
+                           "Popen", "InjectionLiteC"]),
         .target(
             name: "InjectionLiteC",
             dependencies: []),

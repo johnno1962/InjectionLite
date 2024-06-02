@@ -14,7 +14,7 @@
 #if DEBUG
 import InjectionLiteC
 import Foundation
-import Popen
+import PopenD
 
 public struct Recompiler {
 

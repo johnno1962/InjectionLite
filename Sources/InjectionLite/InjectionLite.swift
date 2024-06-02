@@ -12,8 +12,8 @@
 #if DEBUG
 import InjectionLiteC
 import Foundation
-import SwiftRegex
-import DLKit
+import SwiftRegexD
+import DLKitD
 
 func log(_ what: Any...) {
     print(APP_PREFIX+what.map {"\($0)"}.joined(separator: " "))

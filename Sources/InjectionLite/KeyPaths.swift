@@ -12,11 +12,11 @@
 //  identifier of the calling site so they remain invariant over an injection.
 //
 
-#if true && DEBUG || !SWIFT_PACKAGE
+#if DEBUG || !SWIFT_PACKAGE
 import Foundation
-import SwiftRegex
-import fishhook
-import DLKit
+import SwiftRegexD
+import fishhookD
+import DLKitD
 
 private struct ViewBodyKeyPaths {
     typealias KeyPathFunc = @convention(c) (UnsafeMutableRawPointer,

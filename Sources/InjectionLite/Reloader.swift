@@ -11,7 +11,7 @@
 //
 #if DEBUG
 import Foundation
-import DLKit
+import DLKitD
 
 public func autoBitCast<IN,OUT>(_ x: IN) -> OUT {
     return unsafeBitCast(x, to: OUT.self)
