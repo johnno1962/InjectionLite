@@ -102,8 +102,8 @@ public struct Recompiler {
     static let parsePlatform = try! NSRegularExpression(pattern:
         #"-(?:isysroot|sdk)(?: |"\n")((\#(fileNameRegex)/Contents/Developer)/Platforms/(\w+)\.platform\#(fileNameRegex)\#\.sdk)"#)
 
-    var xcodeDev = "/Applications/Xcode.app/Contents/Developer"
-    var platform = "iPhoneSimulator"
+    public static var xcodeDev = "/Applications/Xcode.app/Contents/Developer"
+    public static var platform = "iPhoneSimulator"
 
     func evalError(_ str: String) -> Int {
         log("⚠️ "+str)
@@ -120,7 +120,7 @@ public struct Recompiler {
 
     /// Create a dyanmic library from an object file
     mutating func link(objectFile: String, _ compileCommand: String) -> String? {
-        var sdk = "\(xcodeDev)/Platforms/\(platform).platform/Developer/SDKs/\(platform).sdk"
+        var sdk = "\(Self.xcodeDev)/Platforms/\(Self.platform).platform/Developer/SDKs/\(Self.platform).sdk"
         if let match = Self.parsePlatform.firstMatch(in: compileCommand,
             options: [], range: NSMakeRange(0, compileCommand.utf16.count)) {
             func extract(group: Int, into: inout String) {
@@ -131,14 +131,14 @@ public struct Recompiler {
                 }
             }
             extract(group: 1, into: &sdk)
-            extract(group: 2, into: &xcodeDev)
-            extract(group: 4, into: &platform)
+            extract(group: 2, into: &Self.xcodeDev)
+            extract(group: 4, into: &Self.platform)
         } else if compileCommand.contains(" -o ") {
             _ = evalError("Unable to parse SDK from: \(compileCommand)")
         }
 
         var osSpecific = ""
-        switch platform {
+        switch Self.platform {
         case "iPhoneSimulator":
             osSpecific = "-mios-simulator-version-min=9.0"
         case "iPhoneOS":
@@ -155,17 +155,17 @@ public struct Recompiler {
         case "XRSimulator": fallthrough case "XROS":
             osSpecific = ""
         default:
-            _ = evalError("Invalid platform \(platform)")
+            _ = evalError("Invalid platform \(Self.platform)")
             // -Xlinker -bundle_loader -Xlinker \"\(Bundle.main.executablePath!)\""
         }
 
         let dylib = tmpbase+".dylib"
-        let toolchain = xcodeDev+"/Toolchains/XcodeDefault.xctoolchain"
+        let toolchain = Self.xcodeDev+"/Toolchains/XcodeDefault.xctoolchain"
         let frameworks = Bundle.main.privateFrameworksPath ?? "/tmp"
         let linkCommand = """
             "\(toolchain)/usr/bin/clang" -arch "\(arch)" \
                 -Xlinker -dylib -isysroot "__PLATFORM__" \
-                -L"\(toolchain)/usr/lib/swift/\(platform.lowercased())" \(osSpecific) \
+                -L"\(toolchain)/usr/lib/swift/\(Self.platform.lowercased())" \(osSpecific) \
                 -undefined dynamic_lookup -dead_strip -Xlinker -objc_abi_version \
                 -Xlinker 2 -Xlinker -interposable -fobjc-arc \
                 -fprofile-instr-generate \(objectFile) -L "\(frameworks)" -F "\(frameworks)" \

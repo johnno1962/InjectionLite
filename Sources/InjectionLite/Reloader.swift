@@ -11,17 +11,85 @@
 //
 #if DEBUG
 import Foundation
+import SwiftRegexD
 import DLKitD
 
 public func autoBitCast<IN,OUT>(_ x: IN) -> OUT {
     return unsafeBitCast(x, to: OUT.self)
 }
 
-struct Reloader {
+public struct Reloader {
+
+    static var lastTime = Date.timeIntervalSinceReferenceDate
+    let notification = Notification.Name("INJECTION_BUNDLE_NOTIFICATION")
+    
+    public init() {
+        DLKit.logger = { msg in
+            log(msg)
+            if let symbol: String = msg[#"symbol not found in flat namespace '(.*A\d*_)'"#] {
+                log("""
+                ℹ️ Symbol not found during load. Unfortunately, sometimes it is \
+                not possible to inject code that implies a default argument when \
+                calling a function. Make the value explicit and this should work. \
+                The argument omitted was: \(symbol.swiftDemangle ?? symbol).
+                """)
+            }
+        }
+    }
+
+    @discardableResult
+    func bench(_ what: String, since: TimeInterval = lastTime) -> Bool {
+        let now = Date.timeIntervalSinceReferenceDate
+        if getenv("INJECTION_BENCH") != nil {
+            print(String(format: "⏳%.3fms", (now-since)*1000)+" \(what)")
+        }
+        Self.lastTime = now
+        return true
+    }
+
+    public mutating func loadAndPatch(in dylib: String) -> Bool {
+        bench("Start")
+        guard notXCTest(in: dylib) || loadXCTest,
+              let image = DLKit.load(dylib: dylib) else { return false }
+        
+        let (classes, generics) = patchClasses(in: image)
+        if classes.count != 0 {
+            log("Ignore messages about duplicate classes ⬆️")
+        }
+        
+        let rebound = interposeSymbols(in: image)
+        if classes.count == 0 && rebound.count == 0 &&
+            image.entries(withPrefix: "_OBJC_$_CATEGORY_").count == 0 {
+            log("ℹ️ No symbols replaced, have you added -Xlinker -interposable to your project's \"Other Linker Flags\"?")
+        }
+        
+        mainProcessing(image: image, rebound: rebound, classes: classes, generics: generics)
+        
+        return true
+    }
+    
+    func mainProcessing(image: ImageSymbols, rebound: [DLKit.SymbolName],
+                        classes: [AnyClass], generics: Set<String>) {
+        DispatchQueue.main.async {
+            self.performSweep(oldClasses: classes, generics, image: image)
+            NotificationCenter.default.post(name: self.notification, object: classes)
+            let symbols = Set(rebound.map { String(cString: $0) })
+            log("Loaded and rebound \(symbols.count) symbols \(classes)")
+            
+            if let XCTestCase = objc_getClass("XCTestCase") as? AnyClass {
+                for test in classes where self.isSubclass(test, of: XCTestCase) {
+                    print("\n")
+                    log("Running test \(test)")
+                    NSObject.runXCTestCase(test)
+                }
+            }
+        }
+    }
 
     /// The vtable of classes needs to be patched for overridable methods
-    func patchClasses(in image: ImageSymbols)
+    mutating func patchClasses(in image: ImageSymbols)
         -> (classes: [AnyClass], generics: Set<String>) {
+        let start = Self.lastTime
         var injectedGenerics = Set<String>()
         var oldClasses = [AnyClass]()
 
@@ -50,6 +118,7 @@ struct Reloader {
                 oldClasses.append(oldClass)
             }
         }
+        bench("Patched classes", since: start)
         return (oldClasses, injectedGenerics)
     }
 
@@ -81,6 +150,7 @@ struct Reloader {
             }
             free(UnsafeMutableRawPointer(mutating: classes))
         }
+        bench("Versions of \(aClass)")
         return out
     }
 
@@ -126,15 +196,31 @@ struct Reloader {
                        &classMetadata.pointee.IVarDestroyer)
     }
 
+    var cachedInfo = [Reloader.SIMP:
+        (name: DLKit.SymbolName?, image: ImageSymbols)]()
+    mutating func cachedGetInfo(image: ImageSymbols, impl: Reloader.SIMP) ->
+        (name: DLKit.SymbolName?, image: ImageSymbols)? {
+        if let cached = cachedInfo[impl] {
+            return cached
+        }
+        let lookedup = image[impl]
+        cachedInfo[impl] = lookedup
+        return lookedup
+    }
+
     /// Patch "injectable" members in class vtable
-    public func patchSwift(oldClass: AnyClass, from newClass: AnyClass,
-                           in lastLoaded: ImageSymbols) {
+    public mutating func patchSwift(oldClass: AnyClass, from newClass: AnyClass,
+                                    in lastLoaded: ImageSymbols) {
+        let start = Self.lastTime
+        let allImages = DLKit.allImages
         iterate(oldClass: oldClass, newClass: newClass) {
                 (slots, oldSlots, newSlots) in
                 for slot in 1..<1+slots {
                     guard let impl = newSlots[slot] else { continue }
-                    let lastInfo = lastLoaded[impl]
-                    if let info = lastInfo ?? DLKit.allImages[impl],
+                    let lastInfo =
+                        cachedGetInfo(image: lastLoaded, impl: impl)
+                    if let info = lastInfo ??
+                        cachedGetInfo(image: allImages, impl: impl),
                        let name = info.name,
                        Self.injectableSymbol(name) {
                         if lastInfo == nil, let injectedSuper =
@@ -143,6 +229,7 @@ struct Reloader {
                         }
                         let symbol = name.demangled ??
                                  String(cString: name)
+                        bench("Patched slot[\(slot)] "+symbol)
                         if symbol.contains(".getter : ") &&
                             symbol.hasSuffix(">") &&
                             !symbol.contains(".Optional<__C.") { continue }
@@ -153,6 +240,7 @@ struct Reloader {
                     }
                 }
         }
+        bench("Patched class \(oldClass)", since: start)
     }
 
     /// Old-school swizzling for Objective-C methods
@@ -176,6 +264,7 @@ struct Reloader {
             }
             free(methods)
         }
+        bench("Sizzled class \(String(describing: oldClass))")
     }
 
     /// Swizzle an individual method (for types inheriting from generics)
@@ -223,8 +312,50 @@ struct Reloader {
         // to the newly loaded image
         _ = image.rebind(symbols: Array(Self.interposed.keys),
                          values: Array(Self.interposed.values))
+        bench("Interposed")
         return rebound
     }
+
+    public func isSubclass(_ subClass: AnyClass, of aClass: AnyClass) -> Bool {
+        var subClass: AnyClass? = subClass
+        repeat {
+            if subClass == aClass {
+                return true
+            }
+            subClass = class_getSuperclass(subClass)
+        } while subClass != nil
+        return false
+    }
+
+    func notXCTest(in dylib:String) -> Bool {
+        if let object = NSData(contentsOfFile: dylib),
+           memmem(object.bytes, object.count, "XCTest", 6) != nil,
+           object.count != 0 { return false }
+        return true
+    }
+
+    lazy var loadXCTest: Bool = {
+        let platformDev = Recompiler.xcodeDev +
+            "/Platforms/\(Recompiler.platform).platform/Developer/"
+
+        _ = DLKit.load(dylib: platformDev +
+                       "Library/Frameworks/XCTest.framework/XCTest")
+        _ = DLKit.load(dylib: platformDev +
+                       "usr/lib/libXCTestSwiftSupport.dylib")
+
+        if let plugins = Bundle.main.path(forResource: "PlugIns", ofType: nil),
+           let contents = try? FileManager.default
+            .contentsOfDirectory(atPath: plugins) {
+            for xctest in contents {
+                let name = xctest
+                    .replacingOccurrences(of: ".xctest", with: "")
+                if name != xctest {
+                    _ = DLKit.load(dylib: plugins+"/"+xctest+"/"+name)
+                }
+            }
+        }
+        return true
+    }()
 
     public static var preserveStatics = false
 

@@ -16,7 +16,7 @@ let package = Package(
         .package(url: "https://github.com/johnno1962/DLKit",
                  .upToNextMajor(from: "3.3.6")),
         .package(url: "https://github.com/johnno1962/Popen",
-                 .upToNextMajor(from: "2.1.4")),
+                 .upToNextMajor(from: "2.1.5")),
         .package(url: "https://github.com/johnno1962/SwiftRegex5",
                  .upToNextMajor(from: "6.1.1")),
     ],

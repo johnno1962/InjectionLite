@@ -12,7 +12,6 @@
 #if DEBUG
 import InjectionLiteC
 import Foundation
-import SwiftRegexD
 import DLKitD
 
 func log(_ what: Any...) {
@@ -35,29 +34,13 @@ open class InjectionLite: NSObject {
     var watcher: FileWatcher?
     var recompiler = Recompiler()
     var reloader = Reloader()
-    let notification = Notification.Name("INJECTION_BUNDLE_NOTIFICATION")
-    public let injectionQueue = dlsym(RTLD_DEFAULT, VAPOR_SYMBOL) != nil ?
+    public static let injectionQueue = dlsym(RTLD_DEFAULT, VAPOR_SYMBOL) != nil ?
         DispatchQueue(label: "InjectionQueue") : .main
 
-    public init(passive: Bool) {
-        DLKit.logger = { msg in
-            log(msg)
-            if let symbol: String = msg[#"symbol not found in flat namespace '(.*A\d*_)'"#] {
-                log("""
-                ℹ️ Symbol not found during load. Unfortunately, sometimes it is \
-                not possible to inject code that implies a default argument when \
-                calling a function. Make the value explicit and this should work. \
-                The argument omitted was: \(symbol.swiftDemangle ?? symbol).
-                """)
-            }
-        }
-        super.init()
-    }
-
     /// Called from InjectionBoot.m, setup filewatch and wait...
-    public convenience override init() {
-        self.init(passive: false)
-        injectionQueue.async {
+    public override init() {
+        super.init()
+        Self.injectionQueue.async {
             self.performInjection()
         }
     }
@@ -82,7 +65,7 @@ open class InjectionLite: NSObject {
             }
         }
 
-        let isVapor = injectionQueue != .main
+        let isVapor = Self.injectionQueue != .main
         watcher = FileWatcher(roots: dirs, callback: { filesChanged in
             for file in filesChanged {
                 self.inject(source: file)
@@ -97,85 +80,12 @@ open class InjectionLite: NSObject {
     func inject(source: String) {
         let usingCached = recompiler.longTermCache[source] != nil
         if let dylib = recompiler.recompile(source: source),
-           loadAndPatch(in: dylib) {
+           reloader.loadAndPatch(in: dylib) {
         } else if usingCached {
             recompiler.longTermCache.removeObject(forKey: source)
             recompiler.writeToCache()
             inject(source: source)
         }
     }
-    
-    open func loadAndPatch(in dylib: String) -> Bool {
-        guard notXCTest(in: dylib) || loadXCTest,
-              let image = DLKit.load(dylib: dylib) else { return false }
-        
-        let (classes, generics) = reloader.patchClasses(in: image)
-        if classes.count != 0 {
-            log("Ignore messages about duplicate classes ⬆️")
-        }
-        
-        let rebound = reloader.interposeSymbols(in: image)
-        if classes.count == 0 && rebound.count == 0 &&
-            image.entries(withPrefix: "_OBJC_$_CATEGORY_").count == 0 {
-            log("ℹ️ No symbols replaced, have you added -Xlinker -interposable to your project's \"Other Linker Flags\"?")
-        }
-        
-        DispatchQueue.main.async {
-            self.reloader.performSweep(oldClasses: classes, generics, image: image)
-            NotificationCenter.default.post(name: self.notification, object: classes)
-            let symbols = Set(rebound.map { String(cString: $0) })
-            log("Loaded and rebound \(symbols.count) symbols \(classes)")
-            
-            if let XCTestCase = objc_getClass("XCTestCase") as? AnyClass {
-                for test in classes where self.isSubclass(test, of: XCTestCase) {
-                    print("\n\(APP_PREFIX)Running test \(test)")
-                    NSObject.runXCTestCase(test)
-                }
-            }
-        }
-        
-        return true
-    }
-
-    open func isSubclass(_ subClass: AnyClass, of aClass: AnyClass) -> Bool {
-        var subClass: AnyClass? = subClass
-        repeat {
-            if subClass == aClass {
-                return true
-            }
-            subClass = class_getSuperclass(subClass)
-        } while subClass != nil
-        return false
-    }
-
-    func notXCTest(in dylib:String) -> Bool {
-        if let object = NSData(contentsOfFile: dylib),
-           memmem(object.bytes, object.count, "XCTest", 6) != nil,
-           object.count != 0 { return false }
-        return true
-    }
-
-    lazy var loadXCTest: Bool = {
-        let platformDev = recompiler.xcodeDev +
-            "/Platforms/\(recompiler.platform).platform/Developer/"
-
-        _ = DLKit.load(dylib: platformDev +
-                       "Library/Frameworks/XCTest.framework/XCTest")
-        _ = DLKit.load(dylib: platformDev +
-                       "usr/lib/libXCTestSwiftSupport.dylib")
-
-        if let plugins = Bundle.main.path(forResource: "PlugIns", ofType: nil),
-           let contents = try? FileManager.default
-            .contentsOfDirectory(atPath: plugins) {
-            for xctest in contents {
-                let name = xctest
-                    .replacingOccurrences(of: ".xctest", with: "")
-                if name != xctest {
-                    _ = DLKit.load(dylib: plugins+"/"+xctest+"/"+name)
-                }
-            }
-        }
-        return true
-    }()
 }
 #endif
