@@ -14,6 +14,14 @@ import Foundation
 import SwiftRegexD
 import DLKitD
 
+#if os(macOS)
+import AppKit
+typealias OSApplication = NSApplication
+#else
+import UIKit
+typealias OSApplication = UIApplication
+#endif
+
 public func autoBitCast<IN,OUT>(_ x: IN) -> OUT {
     return unsafeBitCast(x, to: OUT.self)
 }
@@ -21,8 +29,8 @@ public func autoBitCast<IN,OUT>(_ x: IN) -> OUT {
 public struct Reloader {
 
     static var lastTime = Date.timeIntervalSinceReferenceDate
-    let notification = Notification.Name("INJECTION_BUNDLE_NOTIFICATION")
-    
+    public let sweeper = Sweeper()
+
     public init() {
         DLKit.logger = { msg in
             log(msg)
@@ -38,7 +46,7 @@ public struct Reloader {
     }
 
     @discardableResult
-    func bench(_ what: String, since: TimeInterval = lastTime) -> Bool {
+    func bench(_ what: String, since: TimeInterval = Self.lastTime) -> Bool {
         let now = Date.timeIntervalSinceReferenceDate
         if getenv("INJECTION_BENCH") != nil {
             print(String(format: "⏳%.3fms", (now-since)*1000)+" \(what)")
@@ -46,49 +54,34 @@ public struct Reloader {
         Self.lastTime = now
         return true
     }
+    
+    public typealias ClassInfo = (old: [AnyClass], new: [AnyClass],
+                                  generics: Set<String>)
 
-    public mutating func loadAndPatch(in dylib: String) -> Bool {
+    public mutating func loadAndPatch(in dylib: String) ->
+        (image: ImageSymbols, classes: ClassInfo)? {
         bench("Start")
         guard notXCTest(in: dylib) || loadXCTest,
-              let image = DLKit.load(dylib: dylib) else { return false }
+              let image = DLKit.load(dylib: dylib) else { return nil }
         
-        let (classes, generics) = patchClasses(in: image)
-        if classes.count != 0 {
+        let classes = patchClasses(in: image)
+        if classes.new.count != 0 {
             log("Ignore messages about duplicate classes ⬆️")
         }
         
         let rebound = interposeSymbols(in: image)
-        if classes.count == 0 && rebound.count == 0 &&
+        if classes.new.count == 0 && rebound.count == 0 &&
             image.entries(withPrefix: "_OBJC_$_CATEGORY_").count == 0 {
             log("ℹ️ No symbols replaced, have you added -Xlinker -interposable to your project's \"Other Linker Flags\"?")
         }
-        
-        mainProcessing(image: image, rebound: rebound, classes: classes, generics: generics)
-        
-        return true
-    }
-    
-    func mainProcessing(image: ImageSymbols, rebound: [DLKit.SymbolName],
-                        classes: [AnyClass], generics: Set<String>) {
-        DispatchQueue.main.async {
-            self.performSweep(oldClasses: classes, generics, image: image)
-            NotificationCenter.default.post(name: self.notification, object: classes)
-            let symbols = Set(rebound.map { String(cString: $0) })
-            log("Loaded and rebound \(symbols.count) symbols \(classes)")
-            
-            if let XCTestCase = objc_getClass("XCTestCase") as? AnyClass {
-                for test in classes where self.isSubclass(test, of: XCTestCase) {
-                    print("\n")
-                    log("Running test \(test)")
-                    NSObject.runXCTestCase(test)
-                }
-            }
-        }
+
+        let symbols = Set(rebound.map { String(cString: $0) })
+        log("Loaded and rebound \(symbols.count) symbols \(classes.new)")
+        return (image, classes)
     }
 
     /// The vtable of classes needs to be patched for overridable methods
-    mutating func patchClasses(in image: ImageSymbols)
-        -> (classes: [AnyClass], generics: Set<String>) {
+    mutating func patchClasses(in image: ImageSymbols) -> ClassInfo {
         let start = Self.lastTime
         var injectedGenerics = Set<String>()
         var oldClasses = [AnyClass]()
@@ -101,15 +94,17 @@ public struct Reloader {
             }
         }
 
+        var newClasses = [AnyClass]()
         for aClass in Set((image.swiftSymbols(withSuffixes: ["CN"]) +
                            image.entries(withPrefix: "OBJC_CLASS_$_"))
                     .compactMap { $0.value }) {
             let newClass: AnyClass = autoBitCast(aClass)
             injectedGenerics.remove(_typeName(newClass))
+            newClasses.append(newClass)
             for oldClass in versions(of: newClass) {
                 patchSwift(oldClass: oldClass, from: newClass, in: image)
                 if inheritedGeneric(anyType: oldClass) {
-                    swizzleBasics(oldClass: oldClass, in: image)
+                    Self.swizzleBasics(oldClass: oldClass, in: image)
                 } else {
                     swizzle(oldClass: object_getClass(oldClass),
                             from: object_getClass(newClass))
@@ -119,7 +114,7 @@ public struct Reloader {
             }
         }
         bench("Patched classes", since: start)
-        return (oldClasses, injectedGenerics)
+        return (oldClasses, newClasses, injectedGenerics)
     }
 
     /// Does the type derive from a generic (crashes some Objective-C apis)
@@ -150,12 +145,12 @@ public struct Reloader {
             }
             free(UnsafeMutableRawPointer(mutating: classes))
         }
-        bench("Versions of \(aClass)")
+        bench("\(out.count) versions of \(aClass)")
         return out
     }
 
     /// Extract pointers to class vtables in class meta-data
-    func iterate(oldClass: AnyClass, newClass: AnyClass,
+    static func iterateSlots(oldClass: AnyClass, newClass: AnyClass,
                  patcher: (_ slots: Int,
                            _ oldSlots: UnsafeMutablePointer<SIMP?>,
                            _ newSlots: UnsafeMutablePointer<SIMP?>) -> Void) {
@@ -213,7 +208,7 @@ public struct Reloader {
                                     in lastLoaded: ImageSymbols) {
         let start = Self.lastTime
         let allImages = DLKit.allImages
-        iterate(oldClass: oldClass, newClass: newClass) {
+        Self.iterateSlots(oldClass: oldClass, newClass: newClass) {
                 (slots, oldSlots, newSlots) in
                 for slot in 1..<1+slots {
                     guard let impl = newSlots[slot] else { continue }
@@ -268,7 +263,7 @@ public struct Reloader {
     }
 
     /// Swizzle an individual method (for types inheriting from generics)
-    func swizzle(oldClass: AnyClass, selector: Selector,
+    static func swizzle(oldClass: AnyClass, selector: Selector,
                  in image: ImageSymbols) -> Int {
         if let method = class_getInstanceMethod(oldClass, selector) {
            let existing = method_getImplementation(method)
@@ -287,6 +282,18 @@ public struct Reloader {
            }
         }
         return 0
+    }
+
+    /// Best effort here for generics. Swizzle injected() and viewDidLoad() methods.
+    @discardableResult
+    static func swizzleBasics(oldClass: AnyClass, in image: ImageSymbols) -> Int {
+        var swizzled = swizzle(oldClass: oldClass,
+                               selector: Sweeper.injectedSEL, in: image)
+        #if os(iOS) || os(tvOS)
+        swizzled += swizzle(oldClass: oldClass, selector:
+            #selector(UIViewController.viewDidLoad), in: image)
+        #endif
+        return swizzled
     }
 
     static var interposed = [String: UnsafeMutableRawPointer]()
@@ -316,17 +323,6 @@ public struct Reloader {
         return rebound
     }
 
-    public func isSubclass(_ subClass: AnyClass, of aClass: AnyClass) -> Bool {
-        var subClass: AnyClass? = subClass
-        repeat {
-            if subClass == aClass {
-                return true
-            }
-            subClass = class_getSuperclass(subClass)
-        } while subClass != nil
-        return false
-    }
-
     func notXCTest(in dylib:String) -> Bool {
         if let object = NSData(contentsOfFile: dylib),
            memmem(object.bytes, object.count, "XCTest", 6) != nil,
@@ -335,6 +331,7 @@ public struct Reloader {
     }
 
     lazy var loadXCTest: Bool = {
+        #if targetEnvironment(simulator) || os(macOS)
         let platformDev = Recompiler.xcodeDev +
             "/Platforms/\(Recompiler.platform).platform/Developer/"
 
@@ -342,7 +339,7 @@ public struct Reloader {
                        "Library/Frameworks/XCTest.framework/XCTest")
         _ = DLKit.load(dylib: platformDev +
                        "usr/lib/libXCTestSwiftSupport.dylib")
-
+        #endif
         if let plugins = Bundle.main.path(forResource: "PlugIns", ofType: nil),
            let contents = try? FileManager.default
             .contentsOfDirectory(atPath: plugins) {

@@ -13,21 +13,41 @@ import InjectionLiteC
 import Foundation
 import DLKitD
 
-#if os(macOS)
-import AppKit
-typealias OSApplication = NSApplication
-#else
-import UIKit
-typealias OSApplication = UIApplication
-#endif
-
 @objc public protocol SwiftInjected {
     @objc optional func injected()
 }
 
-extension Reloader {
-    static let injectedSEL = #selector(SwiftInjected.injected)
+public struct Sweeper {
     static var sweepWarned = false
+    static let injectedSEL = #selector(SwiftInjected.injected)
+    let notification = Notification.Name("INJECTION_BUNDLE_NOTIFICATION")
+
+    public func sweepAndRunTests(image: ImageSymbols,
+                                 classes: Reloader.ClassInfo) {
+        DispatchQueue.main.async {
+            performSweep(oldClasses: classes.old, classes.generics, image: image)
+            NotificationCenter.default.post(name: notification, object: classes.new)
+
+            if let XCTestCase = objc_getClass("XCTestCase") as? AnyClass {
+                for test in classes.new where isSubclass(test, of: XCTestCase) {
+                    print("\n")
+                    log("Running test \(test)")
+                    NSObject.runXCTestCase(test)
+                }
+            }
+        }
+    }
+
+    func isSubclass(_ subClass: AnyClass, of aClass: AnyClass) -> Bool {
+        var subClass: AnyClass? = subClass
+        repeat {
+            if subClass == aClass {
+                return true
+            }
+            subClass = class_getSuperclass(subClass)
+        } while subClass != nil
+        return false
+    }
 
     func performSweep(oldClasses: [AnyClass],
                       _ injectedGenerics: Set<String>, image: ImageSymbols) {
@@ -102,7 +122,7 @@ extension Reloader {
            injectedGenerics.contains(genericClassName) {
             if patched.insert(autoBitCast(oldClass)).inserted {
                 let patched = newPatchSwift(oldClass: oldClass, in: image)
-                let swizzled = swizzleBasics(oldClass: oldClass, in: image)
+                let swizzled = Reloader.swizzleBasics(oldClass: oldClass, in: image)
                 log("Injected generic '\(oldClass)' (\(patched),\(swizzled))")
             }
             return oldClass.instancesRespond(to: Self.injectedSEL)
@@ -114,18 +134,18 @@ extension Reloader {
     func newPatchSwift(oldClass: AnyClass, in lastLoaded: ImageSymbols) -> Int {
         var patched = 0
 
-        iterate(oldClass: oldClass, newClass: oldClass) {
+        Reloader.iterateSlots(oldClass: oldClass, newClass: oldClass) {
             (slots, oldSlots, _) in
             for slotIndex in 1..<1+slots {
                 guard let existing = oldSlots[slotIndex],
                       let symname = lastLoaded[existing]?.name ??
                         DLKit.allImages[existing]?.name,
-                      Self.injectableSymbol(symname) else { continue }
+                      Reloader.injectableSymbol(symname) else { continue }
                 let symbol = String(cString: symname)
                 let demangled = symname.demangled ?? symbol
 
                 guard let replacement = lastLoaded[symname] ??
-                    Self.interposed[symbol] ?? DLKit.allImages[symname] else {
+                    Reloader.interposed[symbol] ?? DLKit.allImages[symname] else {
                     log("⚠️ Class patching failed to lookup \(demangled)")
                     continue
                 }
@@ -138,18 +158,6 @@ extension Reloader {
         }
 
         return patched
-    }
-
-    /// Best effort here for generics. Swizzle injected() and viewDidLoad() methods.
-    @discardableResult
-    func swizzleBasics(oldClass: AnyClass, in image: ImageSymbols) -> Int {
-        var swizzled = swizzle(oldClass: oldClass,
-                               selector: Self.injectedSEL, in: image)
-        #if os(iOS) || os(tvOS)
-        swizzled += swizzle(oldClass: oldClass, selector:
-            #selector(UIViewController.viewDidLoad), in: image)
-        #endif
-        return swizzled
     }
 }
 

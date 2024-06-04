@@ -80,7 +80,8 @@ open class InjectionLite: NSObject {
     func inject(source: String) {
         let usingCached = recompiler.longTermCache[source] != nil
         if let dylib = recompiler.recompile(source: source),
-           reloader.loadAndPatch(in: dylib) {
+           let (image, classes) = reloader.loadAndPatch(in: dylib) {
+            reloader.sweeper.sweepAndRunTests(image: image, classes: classes)
         } else if usingCached {
             recompiler.longTermCache.removeObject(forKey: source)
             recompiler.writeToCache()
