@@ -14,11 +14,11 @@ let package = Package(
     dependencies: [
         // Dependencies declare other packages that this package depends on.
         .package(url: "https://github.com/johnno1962/DLKit",
-                 .upToNextMajor(from: "3.3.7")),
+                 .upToNextMajor(from: "3.4.0")),
         .package(url: "https://github.com/johnno1962/Popen",
                  .upToNextMajor(from: "2.1.5")),
         .package(url: "https://github.com/johnno1962/SwiftRegex5",
-                 .upToNextMajor(from: "6.1.1")),
+                 .upToNextMajor(from: "6.1.2")),
     ],
     targets: [
         // Targets are the basic building blocks of a package. A target can define a module or a test suite.

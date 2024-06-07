@@ -17,10 +17,12 @@ import DLKitD
 func log(_ what: Any...) {
     print(APP_PREFIX+what.map {"\($0)"}.joined(separator: " "))
 }
-func detail(_ str: @autoclosure () -> String) {
+@discardableResult
+func detail(_ str: @autoclosure () -> String) -> Bool {
     if getenv("INJECTION_DETAIL") != nil {
         log(str())
     }
+    return true
 }
 
 // for compatability

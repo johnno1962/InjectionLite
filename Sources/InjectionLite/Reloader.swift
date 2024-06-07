@@ -191,14 +191,13 @@ public struct Reloader {
                        &classMetadata.pointee.IVarDestroyer)
     }
 
-    var cachedInfo = [Reloader.SIMP:
-        (name: DLKit.SymbolName?, image: ImageSymbols)]()
-    mutating func cachedGetInfo(image: ImageSymbols, impl: Reloader.SIMP) ->
-        (name: DLKit.SymbolName?, image: ImageSymbols)? {
+    var cachedInfo = [Reloader.SIMP: DLKit.SymbolName]()
+    mutating func cachedGetInfo(image: ImageSymbols,
+                                impl: Reloader.SIMP) -> DLKit.SymbolName? {
         if let cached = cachedInfo[impl] {
             return cached
         }
-        let lookedup = image[impl]
+        let lookedup = image[impl]?.name
         cachedInfo[impl] = lookedup
         return lookedup
     }
@@ -212,18 +211,17 @@ public struct Reloader {
                 (slots, oldSlots, newSlots) in
                 for slot in 1..<1+slots {
                     guard let impl = newSlots[slot] else { continue }
-                    let lastInfo =
+                    let lastName =
                         cachedGetInfo(image: lastLoaded, impl: impl)
-                    if let info = lastInfo ??
+                    if let symname = lastName ??
                         cachedGetInfo(image: allImages, impl: impl),
-                       let name = info.name,
-                       Self.injectableSymbol(name) {
-                        if lastInfo == nil, let injectedSuper =
-                            Self.interposed[String(cString: name)] {
+                       Self.injectableSymbol(symname) {
+                        let symstr = String(cString: symname)
+                        if lastName == nil,
+                           let injectedSuper = Self.interposed[symstr] {
                             newSlots[slot] = injectedSuper
                         }
-                        let symbol = name.demangled ??
-                                 String(cString: name)
+                        let symbol = symname.demangled ?? symstr
                         bench("Patched slot[\(slot)] "+symbol)
                         if symbol.contains(".getter : ") &&
                             symbol.hasSuffix(">") &&
@@ -278,7 +276,7 @@ public struct Reloader {
                                    String(cString: symname)))
                return 1
            } else {
-               detail("⚠️ Swizzle failed -[\(oldClass) \(selector)]")
+               detail("⚠️ Swizzle generic failed -[\(oldClass) \(selector)]")
            }
         }
         return 0
