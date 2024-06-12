@@ -72,7 +72,8 @@ public struct Reloader {
         let rebound = interposeSymbols(in: image)
         if classes.new.count == 0 && rebound.count == 0 &&
             image.entries(withPrefix: "_OBJC_$_CATEGORY_").count == 0 {
-            log("ℹ️ No symbols replaced, have you added -Xlinker -interposable to your project's \"Other Linker Flags\"?")
+            log("ℹ️ No symbols replaced, have you added -Xlinker -interposable" +
+                " to your project's Debug configuration \"Other Linker Flags\"?")
         }
 
         let symbols = Set(rebound.map { String(cString: $0) })
