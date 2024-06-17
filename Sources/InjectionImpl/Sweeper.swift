@@ -1,5 +1,6 @@
 //
 //  Sweeper.swift
+//  Copyright © 2024 John Holdsworth. All rights reserved.
 //
 //  This is how the instance level @objc func injected()
 //  method is called. Performs a "sweep" of all live
@@ -9,7 +10,7 @@
 //  Created by John Holdsworth on 25/02/2023.
 //
 #if DEBUG
-import InjectionLiteC
+import InjectionImplC
 import Foundation
 import DLKitD
 

@@ -1,5 +1,6 @@
 //
 //  Reloader.swift
+//  Copyright © 2024 John Holdsworth. All rights reserved.
 //
 //  Perform all the magic of patching, swizzling
 //  and interposing to bind new implementations
@@ -12,6 +13,7 @@
 #if DEBUG
 import Foundation
 import SwiftRegexD
+import InjectionImplC
 import DLKitD
 
 #if os(macOS)
@@ -22,13 +24,11 @@ import UIKit
 typealias OSApplication = UIApplication
 #endif
 
-public func autoBitCast<IN,OUT>(_ x: IN) -> OUT {
-    return unsafeBitCast(x, to: OUT.self)
-}
-
 public struct Reloader {
 
-    static var lastTime = Date.timeIntervalSinceReferenceDate
+    public static var lastTime = Date.timeIntervalSinceReferenceDate
+    public static var unhider: (() -> Void)?
+    public static var injectionNumber = 0
     public let sweeper = Sweeper()
 
     public init() {
@@ -41,6 +41,7 @@ public struct Reloader {
                 calling a function. Make the value explicit and this should work. \
                 The argument omitted was: \(symbol.swiftDemangle ?? symbol).
                 """)
+                Self.unhider?()
             }
         }
     }
@@ -172,7 +173,7 @@ public struct Reloader {
             log("""
                 ⚠️ Mixing Xcode versions across injection. This may work \
                 but "Clean Build Folder" when switching Xcode versions. \
-                To clear the cache: rm \(Recompiler.cacheFile)
+                To clear the cache: rm \(Self.cacheFile)
                 """)
         } else if classMetadata.pointee.ClassSize !=
                     existingClass.pointee.ClassSize {
@@ -238,8 +239,7 @@ public struct Reloader {
     }
 
     /// Old-school swizzling for Objective-C methods
-    func swizzle(oldClass: AnyClass?,
-                 from newClass: AnyClass?) {
+    func swizzle(oldClass: AnyClass?, from newClass: AnyClass?) {
         var methodCount: UInt32 = 0, swizzled = 0
         if let methods = class_copyMethodList(newClass, &methodCount) {
             for i in 0 ..< Int(methodCount) {
@@ -263,7 +263,7 @@ public struct Reloader {
 
     /// Swizzle an individual method (for types inheriting from generics)
     static func swizzle(oldClass: AnyClass, selector: Selector,
-                 in image: ImageSymbols) -> Int {
+                        in image: ImageSymbols) -> Int {
         if let method = class_getInstanceMethod(oldClass, selector) {
            let existing = method_getImplementation(method)
            if let symname = DLKit.appImages[unsafeBitCast(existing,
@@ -331,8 +331,8 @@ public struct Reloader {
 
     lazy var loadXCTest: Bool = {
         #if targetEnvironment(simulator) || os(macOS)
-        let platformDev = Recompiler.xcodeDev +
-            "/Platforms/\(Recompiler.platform).platform/Developer/"
+        let platformDev = Self.xcodeDev +
+            "/Platforms/\(Self.platform).platform/Developer/"
 
         _ = DLKit.load(dylib: platformDev +
                        "Library/Frameworks/XCTest.framework/XCTest")

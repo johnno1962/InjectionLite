@@ -9,14 +9,17 @@ let package = Package(
         // Products define the executables and libraries a package produces, and make them visible to other packages.
         .library(
             name: "InjectionLite",
-            targets: ["InjectionLiteC", "InjectionLite"]),
+            targets: ["InjectionLite"]),
+        .library(
+            name: "InjectionImpl",
+            targets: ["InjectionImpl"]),
     ],
     dependencies: [
         // Dependencies declare other packages that this package depends on.
         .package(url: "https://github.com/johnno1962/DLKit",
-                 .upToNextMajor(from: "3.4.0")),
+                 .upToNextMajor(from: "3.4.1")),
         .package(url: "https://github.com/johnno1962/Popen",
-                 .upToNextMajor(from: "2.1.5")),
+                 .upToNextMajor(from: "2.1.6")),
         .package(url: "https://github.com/johnno1962/SwiftRegex5",
                  .upToNextMajor(from: "6.1.2")),
     ],
@@ -25,13 +28,15 @@ let package = Package(
         // Targets can depend on other targets in this package, and on products in packages this package depends on.
         .target(
             name: "InjectionLite",
-            dependencies: [.product(name: "DLKitD", package: "DLKit"),
-                           .product(name: "PopenD", package: "Popen"),
-                           .product(name: "SwiftRegexD", package: "SwiftRegex"),
-                           "Popen", "InjectionLiteC"]),
+            dependencies: ["InjectionImpl",
+                .product(name: "PopenD", package: "Popen")]),
         .target(
-            name: "InjectionLiteC",
-            dependencies: []),
+            name: "InjectionImpl",
+            dependencies: ["InjectionImplC",
+                .product(name: "DLKitD", package: "DLKit"),
+                .product(name: "SwiftRegexD", package: "SwiftRegex")]),
+        .target(
+            name: "InjectionImplC"),
         .testTarget(
             name: "InjectionLiteTests",
             dependencies: ["InjectionLite"],

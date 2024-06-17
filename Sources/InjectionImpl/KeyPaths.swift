@@ -26,7 +26,7 @@ private struct ViewBodyKeyPaths {
     static var save_getKeyPath: KeyPathFunc!
 
     static var cache = [String: ViewBodyKeyPaths]()
-    static var lastInjectionNumber = Recompiler.injectionNumber
+    static var lastInjectionNumber = Reloader.injectionNumber
     static var hasInjected = false
 
     var lastOffset = 0
@@ -37,6 +37,7 @@ private struct ViewBodyKeyPaths {
 
 @_cdecl("hookKeyPaths")
 public func hookKeyPaths() {
+    let RTLD_DEFAULT = UnsafeMutableRawPointer(bitPattern: -2)
     guard let original = dlsym(RTLD_DEFAULT, ViewBodyKeyPaths.keyPathFuncName) else {
         print("⚠️ Could not find original symbol: \(ViewBodyKeyPaths.keyPathFuncName)")
         return
@@ -55,8 +56,8 @@ public func hookKeyPaths() {
 @_cdecl("injection_getKeyPath")
 public func injection_getKeyPath(pattern: UnsafeMutableRawPointer,
                                  arguments: UnsafeRawPointer) -> UnsafeRawPointer {
-    if ViewBodyKeyPaths.lastInjectionNumber != Recompiler.injectionNumber {
-        ViewBodyKeyPaths.lastInjectionNumber = Recompiler.injectionNumber
+    if ViewBodyKeyPaths.lastInjectionNumber != Reloader.injectionNumber {
+        ViewBodyKeyPaths.lastInjectionNumber = Reloader.injectionNumber
         for key in ViewBodyKeyPaths.cache.keys {
             ViewBodyKeyPaths.cache[key]?.keyPathNumber = 0
             ViewBodyKeyPaths.cache[key]?.recycled = false

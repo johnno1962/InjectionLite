@@ -1,5 +1,6 @@
 //
 //  InjectionLite.swift
+//  Copyright © 2023 John Holdsworth. All rights reserved.
 //
 //  Start a FileWatcher in the user's home directory
 //  and dispatch modified Swift files off to the
@@ -10,25 +11,10 @@
 //
 
 #if DEBUG
-import InjectionLiteC
+import InjectionImplC
+import InjectionImpl
 import Foundation
 import DLKitD
-
-func log(_ what: Any...) {
-    print(APP_PREFIX+what.map {"\($0)"}.joined(separator: " "))
-}
-@discardableResult
-func detail(_ str: @autoclosure () -> String) -> Bool {
-    if getenv("INJECTION_DETAIL") != nil {
-        log(str())
-    }
-    return true
-}
-
-// for compatability
-@objc(InjectionClient)
-public class InjectionClient: NSObject {
-}
 
 @objc(InjectionLite)
 open class InjectionLite: NSObject {
@@ -36,13 +22,11 @@ open class InjectionLite: NSObject {
     var watcher: FileWatcher?
     var recompiler = Recompiler()
     var reloader = Reloader()
-    public static let injectionQueue = dlsym(RTLD_DEFAULT, VAPOR_SYMBOL) != nil ?
-        DispatchQueue(label: "InjectionQueue") : .main
-
+    
     /// Called from InjectionBoot.m, setup filewatch and wait...
     public override init() {
         super.init()
-        Self.injectionQueue.async {
+        Reloader.injectionQueue.async {
             self.performInjection()
         }
     }
@@ -67,7 +51,7 @@ open class InjectionLite: NSObject {
             }
         }
 
-        let isVapor = Self.injectionQueue != .main
+        let isVapor = Reloader.injectionQueue != .main
         watcher = FileWatcher(roots: dirs, callback: { filesChanged in
             for file in filesChanged {
                 self.inject(source: file)

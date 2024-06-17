@@ -1,5 +1,6 @@
 //
 //  LogParser.swift
+//  Copyright © 2023 John Holdsworth. All rights reserved.
 //
 //  Parse the most recently built project's build
 //  logs to find the command to recompile a Swift
@@ -10,6 +11,7 @@
 //  Created by John Holdsworth on 25/02/2023.
 //
 #if DEBUG
+import InjectionImpl
 import Foundation
 import PopenD
 

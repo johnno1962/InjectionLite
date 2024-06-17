@@ -8,13 +8,10 @@
 //  Created by John Holdsworth on 25/02/2023.
 //
 #if DEBUG
-#import "InjectionLiteC.h"
+#import "InjectionImplC.h"
 #import <XCTest/XCTest.h>
 #import <objc/runtime.h>
 #import <dlfcn.h>
-
-@interface InjectionLite: NSObject
-@end
 
 @implementation NSObject(InjectionBoot)
 
@@ -27,9 +24,9 @@
         if (HKP hookKeyPaths = (HKP)dlsym(RTLD_DEFAULT, "hookKeyPaths"))
         #endif
             hookKeyPaths();
-    static InjectionLite *singleton;
-    if (objc_getClass("InjectionNext")) return;
-    singleton = [[InjectionLite alloc] init];
+    static NSObject *singleton;
+    if (Class InjectionLite = objc_getClass("InjectionLite"))
+        singleton = [[InjectionLite alloc] init];
 }
 
 + (void)runXCTestCase:(Class)aTestCase {

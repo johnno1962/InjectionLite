@@ -1,5 +1,6 @@
 //
 //  Recompiler.swift
+//  Copyright © 2023 John Holdsworth. All rights reserved.
 //
 //  Run compilation command returned by the log parser
 //  to recompile a Swift source into a new object file
@@ -12,34 +13,21 @@
 //
 
 #if DEBUG
-import InjectionLiteC
+import InjectionImplC
+import InjectionImpl
 import Foundation
 import PopenD
 
 public struct Recompiler {
 
     /// A cache is kept of compiltaion commands in /tmp as Xcode housekeeps logs.
-    static let appName = Bundle.main.executableURL?.lastPathComponent ?? "unknown"
-    #if os(macOS) || targetEnvironment(macCatalyst)
-    static let sdk = "macOS"
-    #elseif os(tvOS)
-    static let sdk = "tvOS"
-    #elseif os(xrOS)
-    static let sdk = "xrOS"
-    #elseif targetEnvironment(simulator)
-    static let sdk = "iOS"
-    #else
-    static let sdk = "maciOS"
-    #endif
-    public static var injectionNumber = 0
-    static var cacheFile = "/tmp/\(appName)_\(sdk)_builds.plist"
-    lazy var longTermCache = NSMutableDictionary(contentsOfFile: Self.cacheFile) ??
+    lazy var longTermCache = NSMutableDictionary(contentsOfFile: Reloader.cacheFile) ??
         NSMutableDictionary()
 
     let parser = LogParser()
     let tmpdir = NSTemporaryDirectory()
     var tmpbase: String {
-        return tmpdir+"eval\(Self.injectionNumber)"
+        return tmpdir+"eval\(Reloader.injectionNumber)"
     }
 
     /// Recompile a source to produce a dynamic library that can be loaded
@@ -57,7 +45,7 @@ public struct Recompiler {
 
         log("Recompiling \(source)")
 
-        Self.injectionNumber += 1
+        Reloader.injectionNumber += 1
         let objectFile = tmpbase+".o"
         try? FileManager.default.removeItem(atPath: objectFile)
         if let errors = Popen.system(command+" -o \(objectFile)", errors: true) {
@@ -76,7 +64,7 @@ public struct Recompiler {
         }
         #if os(tvOS)
         let codesign = """
-            (export CODESIGN_ALLOCATE=\"\(xcodeDev
+            (export CODESIGN_ALLOCATE=\"\(Reloader.xcodeDev
              )/Toolchains/XcodeDefault.xctoolchain/usr/bin/codesign_allocate\"; \
             if /usr/bin/file \"\(dylib)\" | /usr/bin/grep ' shared library ' >/dev/null; \
             then /usr/bin/codesign --force -s - \"\(dylib)\";\
@@ -90,8 +78,8 @@ public struct Recompiler {
         return dylib
     }
 
-    mutating func writeToCache() {
-        longTermCache.write(toFile: Self.cacheFile,
+    public mutating func writeToCache() {
+        longTermCache.write(toFile: Reloader.cacheFile,
                             atomically: true)
     }
 
@@ -102,8 +90,6 @@ public struct Recompiler {
     static let parsePlatform = try! NSRegularExpression(pattern:
         #"-(?:isysroot|sdk)(?: |"\n")((\#(fileNameRegex)/Contents/Developer)/Platforms/(\w+)\.platform\#(fileNameRegex)\#\.sdk)"#)
 
-    public static var xcodeDev = "/Applications/Xcode.app/Contents/Developer"
-    public static var platform = "iPhoneSimulator"
 
     func evalError(_ str: String) -> Int {
         log("⚠️ "+str)
@@ -120,7 +106,7 @@ public struct Recompiler {
 
     /// Create a dyanmic library from an object file
     mutating func link(objectFile: String, _ compileCommand: String) -> String? {
-        var sdk = "\(Self.xcodeDev)/Platforms/\(Self.platform).platform/Developer/SDKs/\(Self.platform).sdk"
+        var sdk = "\(Reloader.xcodeDev)/Platforms/\(Reloader.platform).platform/Developer/SDKs/\(Reloader.platform).sdk"
         if let match = Self.parsePlatform.firstMatch(in: compileCommand,
             options: [], range: NSMakeRange(0, compileCommand.utf16.count)) {
             func extract(group: Int, into: inout String) {
@@ -131,14 +117,14 @@ public struct Recompiler {
                 }
             }
             extract(group: 1, into: &sdk)
-            extract(group: 2, into: &Self.xcodeDev)
-            extract(group: 4, into: &Self.platform)
+            extract(group: 2, into: &Reloader.xcodeDev)
+            extract(group: 4, into: &Reloader.platform)
         } else if compileCommand.contains(" -o ") {
             _ = evalError("Unable to parse SDK from: \(compileCommand)")
         }
 
         var osSpecific = ""
-        switch Self.platform {
+        switch Reloader.platform {
         case "iPhoneSimulator":
             osSpecific = "-mios-simulator-version-min=9.0"
         case "iPhoneOS":
@@ -155,17 +141,17 @@ public struct Recompiler {
         case "XRSimulator": fallthrough case "XROS":
             osSpecific = ""
         default:
-            _ = evalError("Invalid platform \(Self.platform)")
+            _ = evalError("Invalid platform \(Reloader.platform)")
             // -Xlinker -bundle_loader -Xlinker \"\(Bundle.main.executablePath!)\""
         }
 
         let dylib = tmpbase+".dylib"
-        let toolchain = Self.xcodeDev+"/Toolchains/XcodeDefault.xctoolchain"
+        let toolchain = Reloader.xcodeDev+"/Toolchains/XcodeDefault.xctoolchain"
         let frameworks = Bundle.main.privateFrameworksPath ?? "/tmp"
         let linkCommand = """
             "\(toolchain)/usr/bin/clang" -arch "\(arch)" \
                 -Xlinker -dylib -isysroot "__PLATFORM__" \
-                -L"\(toolchain)/usr/lib/swift/\(Self.platform.lowercased())" \(osSpecific) \
+                -L"\(toolchain)/usr/lib/swift/\(Reloader.platform.lowercased())" \(osSpecific) \
                 -undefined dynamic_lookup -dead_strip -Xlinker -objc_abi_version \
                 -Xlinker 2 -Xlinker -interposable -fobjc-arc \
                 -fprofile-instr-generate \(objectFile) -L "\(frameworks)" -F "\(frameworks)" \
