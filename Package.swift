@@ -17,7 +17,7 @@ let package = Package(
     dependencies: [
         // Dependencies declare other packages that this package depends on.
         .package(url: "https://github.com/johnno1962/DLKit",
-                 .upToNextMajor(from: "3.4.1")),
+                 .upToNextMajor(from: "3.4.2")),
         .package(url: "https://github.com/johnno1962/Popen",
                  .upToNextMajor(from: "2.1.6")),
         .package(url: "https://github.com/johnno1962/SwiftRegex5",

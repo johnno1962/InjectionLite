@@ -5,6 +5,7 @@
 //  Copyright © 2024 John Holdsworth. All rights reserved.
 //
 
+#if DEBUG
 import Foundation
 import InjectionImplC
 
@@ -49,3 +50,4 @@ extension Reloader {
     public static var xcodeDev = "/Applications/Xcode.app/Contents/Developer"
     public static var platform = "iPhoneSimulator"
 }
+#endif
