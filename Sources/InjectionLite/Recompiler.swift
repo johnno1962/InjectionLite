@@ -21,8 +21,8 @@ import PopenD
 public struct Recompiler {
 
     /// A cache is kept of compiltaion commands in /tmp as Xcode housekeeps logs.
-    lazy var longTermCache = NSMutableDictionary(contentsOfFile: Reloader.cacheFile) ??
-        NSMutableDictionary()
+    lazy var longTermCache = NSMutableDictionary(contentsOfFile:
+                    Reloader.cacheFile) ?? NSMutableDictionary()
 
     let parser = LogParser()
     let tmpdir = NSTemporaryDirectory()
@@ -90,12 +90,6 @@ public struct Recompiler {
     static let parsePlatform = try! NSRegularExpression(pattern:
         #"-(?:isysroot|sdk)(?: |"\n")((\#(fileNameRegex)/Contents/Developer)/Platforms/(\w+)\.platform\#(fileNameRegex)\#\.sdk)"#)
 
-
-    func evalError(_ str: String) -> Int {
-        log("⚠️ "+str)
-        return 0
-    }
-
     #if arch(arm64)
     public var arch = "arm64"
     #elseif arch(arm)
@@ -106,7 +100,9 @@ public struct Recompiler {
 
     /// Create a dyanmic library from an object file
     mutating func link(objectFile: String, _ compileCommand: String) -> String? {
+        // Default for Objective-C with Xcode 15.3+
         var sdk = "\(Reloader.xcodeDev)/Platforms/\(Reloader.platform).platform/Developer/SDKs/\(Reloader.platform).sdk"
+        // Extract sdk, Xcode path and platform from compilation command
         if let match = Self.parsePlatform.firstMatch(in: compileCommand,
             options: [], range: NSMakeRange(0, compileCommand.utf16.count)) {
             func extract(group: Int, into: inout String) {
@@ -120,7 +116,7 @@ public struct Recompiler {
             extract(group: 2, into: &Reloader.xcodeDev)
             extract(group: 4, into: &Reloader.platform)
         } else if compileCommand.contains(" -o ") {
-            _ = evalError("Unable to parse SDK from: \(compileCommand)")
+            log("⚠️ Unable to parse SDK from: \(compileCommand)")
         }
 
         var osSpecific = ""
@@ -141,7 +137,7 @@ public struct Recompiler {
         case "XRSimulator": fallthrough case "XROS":
             osSpecific = ""
         default:
-            _ = evalError("Invalid platform \(Reloader.platform)")
+            log("⚠️ Invalid platform \(Reloader.platform)")
             // -Xlinker -bundle_loader -Xlinker \"\(Bundle.main.executablePath!)\""
         }
 

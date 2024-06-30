@@ -3,8 +3,8 @@
 //  Copyright © 2024 John Holdsworth. All rights reserved.
 //
 //  This is how the instance level @objc func injected()
-//  method is called. Performs a "sweep" of all live
-//  objects in the app to find instances of classes
+//  method is called. Performs a "sweep" of all reachable
+//  live objects in the app to find instances of classes
 //  that have been injected to message.
 //
 //  Created by John Holdsworth on 25/02/2023.
@@ -39,6 +39,7 @@ public struct Sweeper {
         }
     }
 
+    /// Implement our own as runtime function crashes for generaics.
     func isSubclass(_ subClass: AnyClass, of aClass: AnyClass) -> Bool {
         var subClass: AnyClass? = subClass
         repeat {
@@ -131,7 +132,7 @@ public struct Sweeper {
         return false
     }
 
-    /// Patch vtable by looking up functions by symbol name
+    /// Patch vtable by looking up functions by symbol name when you don't have access to the original class
     func newPatchSwift(oldClass: AnyClass, in lastLoaded: ImageSymbols) -> Int {
         var patched = 0
 
@@ -162,6 +163,7 @@ public struct Sweeper {
     }
 }
 
+/// Sweeper implementation
 class SwiftSweeper {
 
     /// Seeds for the start of the "sweep" to implement instance level injected() method.

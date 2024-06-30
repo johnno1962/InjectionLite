@@ -3,6 +3,8 @@
 //
 //  Created by John Holdsworth on 11/09/2023.
 //
+//  The layout of the meta-data for all classes which is followed by the vtable.
+//
 #if DEBUG
 import Foundation
 

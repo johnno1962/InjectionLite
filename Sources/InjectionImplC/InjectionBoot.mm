@@ -17,6 +17,7 @@
 
 /// This will be called as soon as the package is loaded into memory.
 + (void)load {
+    // Hook Swift runtime's swift_getKeyPath
     typedef void (*HKP)();
     if (getenv("INJECTION_KEYPATHS") ||
         dlsym(RTLD_DEFAULT, "$s22ComposableArchitecture6LoggerCN"))
@@ -24,11 +25,13 @@
         if (HKP hookKeyPaths = (HKP)dlsym(RTLD_DEFAULT, "hookKeyPaths"))
         #endif
             hookKeyPaths();
+    // If InjectionLite clas present, start it up.
     static NSObject *singleton;
     if (Class InjectionLite = objc_getClass("InjectionLite"))
         singleton = [[InjectionLite alloc] init];
 }
 
+/// Run the tests in a XCTest subclass
 + (void)runXCTestCase:(Class)aTestCase {
     Class _XCTestSuite = objc_getClass("XCTestSuite");
     XCTestSuite *suite0 = [_XCTestSuite testSuiteWithName: @"InjectedTest"];

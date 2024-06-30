@@ -51,14 +51,14 @@ open class InjectionLite: NSObject {
             }
         }
 
-        let isVapor = Reloader.injectionQueue != .main
+        let isVapour = Reloader.injectionQueue != .main
         watcher = FileWatcher(roots: dirs, callback: { filesChanged in
             for file in filesChanged {
                 self.inject(source: file)
             }
-        }, runLoop: isVapor ? CFRunLoopGetCurrent() : nil)
+        }, runLoop: isVapour ? CFRunLoopGetCurrent() : nil)
         log(APP_NAME+": Watching for source changes under \(home)/...")
-        if isVapor {
+        if isVapour {
             CFRunLoopRun()
         }
     }
@@ -68,7 +68,7 @@ open class InjectionLite: NSObject {
         if let dylib = recompiler.recompile(source: source),
            let (image, classes) = reloader.loadAndPatch(in: dylib) {
             reloader.sweeper.sweepAndRunTests(image: image, classes: classes)
-        } else if usingCached {
+        } else if usingCached { // Try again once, after reparsing logs.
             recompiler.longTermCache.removeObject(forKey: source)
             recompiler.writeToCache()
             inject(source: source)

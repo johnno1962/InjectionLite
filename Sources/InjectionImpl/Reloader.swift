@@ -26,10 +26,10 @@ typealias OSApplication = UIApplication
 
 public struct Reloader {
 
-    public static var lastTime = Date.timeIntervalSinceReferenceDate
-    public static var unhider: (() -> Void)?
+    public static var lastTime = Date.timeIntervalSinceReferenceDate // benchmarking
+    public static var unhider: (() -> Void)? // Not currently used.
     public static var injectionNumber = 0
-    public let sweeper = Sweeper()
+    public let sweeper = Sweeper() // implements instance level @objc injected()
 
     public init() {
         DLKit.logger = { msg in
@@ -41,7 +41,7 @@ public struct Reloader {
                 calling a function. Make the value explicit and this should work. \
                 The argument omitted was: \(symbol.swiftDemangle ?? symbol).
                 """)
-                Self.unhider?()
+                Self.unhider?() // Could automatically instigate an "unhide".
             }
         }
     }
@@ -62,7 +62,7 @@ public struct Reloader {
     public mutating func loadAndPatch(in dylib: String) ->
         (image: ImageSymbols, classes: ClassInfo)? {
         bench("Start")
-        guard notXCTest(in: dylib) || loadXCTest,
+        guard notXCTest(in: dylib) || loadXCTest, // load XCText libraries.
               let image = DLKit.load(dylib: dylib) else { return nil }
         
         let classes = patchClasses(in: image)
@@ -78,15 +78,15 @@ public struct Reloader {
         }
 
         let symbols = Set(rebound.map { String(cString: $0) })
-        log("Loaded and rebound \(symbols.count) symbols \(classes.new)")
+        log("Loaded and rebound \(symbols.count) symbols, classes \(classes.new)")
         return (image, classes)
     }
 
     /// The vtable of classes needs to be patched for overridable methods
     mutating func patchClasses(in image: ImageSymbols) -> ClassInfo {
-        let start = Self.lastTime
         var injectedGenerics = Set<String>()
         var oldClasses = [AnyClass]()
+        let start = Self.lastTime
 
         for entry in image.swiftSymbols(withSuffixes: ["CMa"]) {
             if let genericClassName = entry.name.demangled?
@@ -108,8 +108,10 @@ public struct Reloader {
                 if inheritedGeneric(anyType: oldClass) {
                     Self.swizzleBasics(oldClass: oldClass, in: image)
                 } else {
-                    swizzle(oldClass: object_getClass(oldClass),
-                            from: object_getClass(newClass))
+                    if let metaClass = object_getClass(oldClass) {
+                        swizzle(oldClass: metaClass,
+                                from: object_getClass(newClass))
+                    }
                     swizzle(oldClass: oldClass, from: newClass)
                 }
                 oldClasses.append(oldClass)
@@ -134,7 +136,7 @@ public struct Reloader {
         return false
     }
 
-    /// Scan class list for previous versions of a class
+    /// Scan global class list for previous versions of a class, not as slow as you might think.
     func versions(of aClass: AnyClass) -> [AnyClass] {
         var out = [AnyClass](), nc: UInt32 = 0
         if let classes = UnsafePointer(objc_copyClassList(&nc)) {
@@ -204,7 +206,7 @@ public struct Reloader {
         return lookedup
     }
 
-    /// Patch "injectable" members in class vtable
+    /// Scann class vtable and patch "injectable" members
     public mutating func patchSwift(oldClass: AnyClass, from newClass: AnyClass,
                                     in lastLoaded: ImageSymbols) {
         let start = Self.lastTime
@@ -239,8 +241,9 @@ public struct Reloader {
     }
 
     /// Old-school swizzling for Objective-C methods
-    func swizzle(oldClass: AnyClass?, from newClass: AnyClass?) {
+    func swizzle(oldClass: AnyClass, from newClass: AnyClass?) {
         var methodCount: UInt32 = 0, swizzled = 0
+        let prefix = class_isMetaClass(oldClass) ? "+" : "-"
         if let methods = class_copyMethodList(newClass, &methodCount) {
             for i in 0 ..< Int(methodCount) {
                 let selector = method_getName(methods[i])
@@ -253,12 +256,25 @@ public struct Reloader {
 
                 if class_replaceMethod(oldClass, selector, replacement,
                     method_getTypeEncoding(methods[i])) != replacement {
+                    detail("Swizzled \(prefix)[\(oldClass) \(selector)]")
                     swizzled += 1
                 }
             }
             free(methods)
         }
         bench("Sizzled class \(String(describing: oldClass))")
+    }
+
+    /// Best effort here for generics. Swizzle injected() and viewDidLoad() methods.
+    @discardableResult
+    static func swizzleBasics(oldClass: AnyClass, in image: ImageSymbols) -> Int {
+        var swizzled = swizzle(oldClass: oldClass,
+                               selector: Sweeper.injectedSEL, in: image)
+        #if os(iOS) || os(tvOS)
+        swizzled += swizzle(oldClass: oldClass, selector:
+            #selector(UIViewController.viewDidLoad), in: image)
+        #endif
+        return swizzled
     }
 
     /// Swizzle an individual method (for types inheriting from generics)
@@ -283,26 +299,14 @@ public struct Reloader {
         return 0
     }
 
-    /// Best effort here for generics. Swizzle injected() and viewDidLoad() methods.
-    @discardableResult
-    static func swizzleBasics(oldClass: AnyClass, in image: ImageSymbols) -> Int {
-        var swizzled = swizzle(oldClass: oldClass,
-                               selector: Sweeper.injectedSEL, in: image)
-        #if os(iOS) || os(tvOS)
-        swizzled += swizzle(oldClass: oldClass, selector:
-            #selector(UIViewController.viewDidLoad), in: image)
-        #endif
-        return swizzled
-    }
-
+    /// Store of previous interposes applied [symbol: most recent implementation]
     static var interposed = [String: UnsafeMutableRawPointer]()
 
     /// Rebind "injectable" symbols in the app to the new implementations just loaded
     mutating func interposeSymbols(in image: ImageSymbols) -> [DLKit.SymbolName] {
-        var names = [DLKit.SymbolName]()
-        var impls = [UnsafeMutableRawPointer]()
+        var names = [DLKit.SymbolName](), impls = [UnsafeMutableRawPointer]()
         for entry in image {
-            guard let value = entry.value,
+            guard let value = entry.value, // Does symbol have a value
                   Self.injectableSymbol(entry.name) else { continue }
             let symbol = String(cString: entry.name)
             detail("Interposing \(value) "+(entry.name.demangled ?? symbol))
@@ -311,17 +315,17 @@ public struct Reloader {
             Self.interposed[symbol] = value
         }
 
-        // apply interposes using "fishhook"
+        // Apply interposes to all loaded images in the app using "fishhook"
         let rebound = DLKit.appImages.rebind(names: names, values: impls)
 
-        // Apply previous interposes
-        // to the newly loaded image
+        // Apply previous interposes to the newly loaded image as well
         _ = image.rebind(symbols: Array(Self.interposed.keys),
                          values: Array(Self.interposed.values))
         bench("Interposed")
         return rebound
     }
 
+    /// A way to determine if a file being injected is an XCTest
     func notXCTest(in dylib:String) -> Bool {
         if let object = NSData(contentsOfFile: dylib),
            memmem(object.bytes, object.count, "XCTest", 6) != nil,
@@ -339,6 +343,7 @@ public struct Reloader {
         _ = DLKit.load(dylib: platformDev +
                        "usr/lib/libXCTestSwiftSupport.dylib")
         #endif
+        // Are there any .xctest bundles packaged with the app? If so, load them
         if let plugins = Bundle.main.path(forResource: "PlugIns", ofType: nil),
            let contents = try? FileManager.default
             .contentsOfDirectory(atPath: plugins) {
@@ -353,7 +358,7 @@ public struct Reloader {
         return true
     }()
 
-    public static var preserveStatics = false
+    public static var preserveStatics = false // preserve top level vars?
 
     /// Determine if symbol name is injectable
     /// - Parameter symname: Pointer to symbol name
@@ -363,8 +368,10 @@ public struct Reloader {
 //        print("Injectable?", String(cString: symname))
         let symstart = symname +
             (symname.pointee == UInt8(ascii: "_") ? 1 : 0)
+        // OK to inject C++
         let isCPlusPlus = strncmp(symstart, "_ZN", 3) == 0
         if isCPlusPlus { return true }
+        // Is user defined Swift symbol?
         let isSwift = strncmp(symstart, "$s", 2) == 0 &&
                      symstart[2] != UInt8(ascii: "S") &&
                      symstart[2] != UInt8(ascii: "s")
@@ -379,6 +386,7 @@ public struct Reloader {
             return false
         }
 
+        // Work the way from the end of the symbol name looking for e.g. *C, *fD
         return
             match(ascii: "C") ||
             match(ascii: "D") && match(ascii: "f") ||
@@ -392,6 +400,7 @@ public struct Reloader {
                 // "Mutable Addressors"
                 !preserveStatics &&
                 match(ascii: "a") && match(ascii: "v")) ||
+            // modified's
             match(ascii: "M") && match(ascii: "v")
     }
 }

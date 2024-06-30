@@ -10,6 +10,7 @@
 //  This is particularly evident in code that uses "The Composable Architecture".
 //  This code maintains a cache of previously allocated key paths using a unique
 //  identifier of the calling site so they remain invariant over an injection.
+//  This isn't an easy peice of code to understand but you shouldn't need to.
 //
 
 #if DEBUG || !SWIFT_PACKAGE
@@ -58,7 +59,7 @@ public func injection_getKeyPath(pattern: UnsafeMutableRawPointer,
                                  arguments: UnsafeRawPointer) -> UnsafeRawPointer {
     if ViewBodyKeyPaths.lastInjectionNumber != Reloader.injectionNumber {
         ViewBodyKeyPaths.lastInjectionNumber = Reloader.injectionNumber
-        for key in ViewBodyKeyPaths.cache.keys {
+        for key in ViewBodyKeyPaths.cache.keys { // Reset counters
             ViewBodyKeyPaths.cache[key]?.keyPathNumber = 0
             ViewBodyKeyPaths.cache[key]?.recycled = false
         }

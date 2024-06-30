@@ -5,8 +5,8 @@
 //  Parse the most recently built project's build
 //  logs to find the command to recompile a Swift
 //  file. The command needs to be processed a little
-//  to only compile the injected Swift source to
-//  produce a single object file.
+//  to only compile the injected Swift source (a.k.a
+//  "-primary-file" to produce a single object file.
 //
 //  Created by John Holdsworth on 25/02/2023.
 //
@@ -27,6 +27,7 @@ struct LogParser {
             log("⚠️ Logs dir not initialised. Edit a file and build your project.")
             return nil
         }
+        // Escape "difficult" characters for shell.
         let triplesc = #"\\\\\\$1"#, escaped = source
             .replacingOccurrences(of: #"([ '(){}])"#, with: triplesc,
                                   options: .regularExpression)
@@ -40,8 +41,7 @@ struct LogParser {
                 then echo $log && exit; fi; done
             """
 
-        let scanning = popen(scanner, "r")
-        defer { _ = pclose(scanning) }
+        let scanning = Popen(cmd: scanner)
         guard let command = scanning?.readLine() else {
             log("Scanner: "+scanner)
             return nil
@@ -58,7 +58,7 @@ struct LogParser {
         }
 
         var command = command as NSString
-        #if targetEnvironment(simulator) // case sensitive file system
+        #if targetEnvironment(simulator) // has a case sensitive file system
         if let argument = try? NSRegularExpression(
             pattern: Recompiler.fileNameRegex) {
             for match in argument.matches(in: command as String,
@@ -77,28 +77,30 @@ struct LogParser {
 
         let escaped = escape(path: source)
         return command
-            // Strip out all per-primary file options.
+            // Remove all output object files
             .replacingOccurrences(of: " -o "+Recompiler.fileNameRegex,
                                   with: " ", options: .regularExpression,
                                   range: NSMakeRange(0, command.length))
+            // Strip out all per-primary-file options.
             .replacingOccurrences(of:
                 #" -(pch-output-dir|supplementary-output-file-map|emit-(reference-)?dependencies|serialize-diagnostics|index-(store|unit-output))-path \#(Recompiler.argumentRegex)"#,
                                   with: "", options: .regularExpression)
-            // save primary source file we are injecting
+            // save to one side primary source file we are injecting
             .replacingOccurrences(of: " -primary-file "+escaped,
                                   with: " -primary-save "+escaped)
-            // strip other -primary-file or all files when -filelist
+            // strip other -primary-file's or all files when -filelist
             .replacingOccurrences(of: " -primary-file " +
                                   (command.contains(" -filelist") ?
                                    Recompiler.argumentRegex : ""),
                 with: " ", options: .regularExpression)
-            // restore the -primary-file
+            // restore the -primary-file saved above
             .replacingOccurrences(of: "-primary-save", with: "-primary-file")
+            // Not required
             .replacingOccurrences(of:
                 "-frontend-parseable-output ", with: "")
     }
 
-    /// determine the real casing of a path on the file system
+    /// determine the real letter casing of a path on the file system
     public func actualCase(path: String) -> String? {
         let fm = FileManager.default
         if fm.fileExists(atPath: path) {

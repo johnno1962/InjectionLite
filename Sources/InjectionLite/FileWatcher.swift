@@ -10,6 +10,7 @@
 //  Started out as an abstraction to watch files under a directory.
 //  "Enhanced" to extract the last modified build log directory by
 //  backdating the event stream to just before the app launched.
+//  This class is "showing its age".
 //
 #if DEBUG
 import Foundation
@@ -121,7 +122,7 @@ public class FileWatcher: NSObject {
             if Self.INJECTABLE_PATTERN.firstMatch(in: path, range:
                         NSMakeRange(0, path.utf16.count)) != nil  &&
                 path.range(of: "DerivedData/|InjectionProject/|.DocumentRevisions-|@__swiftmacro_|main.mm?$",
-                            options:.regularExpression) == nil &&
+                            options: .regularExpression) == nil &&
                 FileManager.default.fileExists(atPath: path as String) {
                 changed.insert(path)
             }
