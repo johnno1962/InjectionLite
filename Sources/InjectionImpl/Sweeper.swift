@@ -22,6 +22,7 @@ public struct Sweeper {
     static var sweepWarned = false
     static let injectedSEL = #selector(SwiftInjected.injected)
     let notification = Notification.Name("INJECTION_BUNDLE_NOTIFICATION")
+    let testQueue = DispatchQueue(label: "INTestQueue")
 
     public func sweepAndRunTests(image: ImageSymbols,
                                  classes: Reloader.ClassInfo) {
@@ -30,10 +31,22 @@ public struct Sweeper {
             NotificationCenter.default.post(name: notification, object: classes.new)
 
             if let XCTestCase = objc_getClass("XCTestCase") as? AnyClass {
-                for test in classes.new where isSubclass(test, of: XCTestCase) {
+                let testClasses = classes.new.filter { isSubclass($0, of: XCTestCase) }
+
+                // Thanks https://github.com/johnno1962/injectionforxcode/pull/234
+                if !testClasses.isEmpty {
                     print("\n")
-                    log("Running test \(test)")
-                    NSObject.runXCTestCase(test)
+                    testQueue.async {
+                        testQueue.suspend()
+                        let timer = Timer(timeInterval: 0, repeats:false, block: { _ in
+                            for newClass in testClasses {
+                                log("Running test \(newClass)")
+                                NSObject.runXCTestCase(newClass)
+                            }
+                            testQueue.resume()
+                        })
+                        RunLoop.main.add(timer, forMode: RunLoop.Mode.common)
+                    }
                 }
             }
         }

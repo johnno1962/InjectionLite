@@ -42,6 +42,14 @@ public struct Reloader {
                 The argument omitted was: \(symbol.swiftDemangle ?? symbol).
                 """)
                 Self.unhider?() // Could automatically instigate an "unhide".
+            } else if msg.contains("Testing.framework") &&
+                        objc_getClass("InjectionNext") != nil {
+                log("""
+                ℹ️ If the error talks of Testing.framework and you are injecting \
+                a test on a device, make sure you have enabled testing and added a \
+                build phase containg the script "copy_test_frameworks.sh" from the \
+                InjectionNext.app bundle and have run tests at some point in the past.
+                """)
             }
         }
     }
@@ -62,7 +70,7 @@ public struct Reloader {
     public mutating func loadAndPatch(in dylib: String) ->
         (image: ImageSymbols, classes: ClassInfo)? {
         bench("Start")
-        guard notXCTest(in: dylib) || loadXCTest, // load XCText libraries.
+        guard !injectingXCTest(in: dylib) || loadXCTest, // load XCText libs.
               let image = DLKit.load(dylib: dylib) else { return nil }
         
         let classes = patchClasses(in: image)
@@ -326,11 +334,11 @@ public struct Reloader {
     }
 
     /// A way to determine if a file being injected is an XCTest
-    func notXCTest(in dylib:String) -> Bool {
+    func injectingXCTest(in dylib: String) -> Bool {
         if let object = NSData(contentsOfFile: dylib),
            memmem(object.bytes, object.count, "XCTest", 6) != nil,
-           object.count != 0 { return false }
-        return true
+           object.count != 0 { return true }
+        return false
     }
 
     lazy var loadXCTest: Bool = {
