@@ -37,16 +37,18 @@ private struct ViewBodyKeyPaths {
 }
 
 @_cdecl("hookKeyPaths")
-public func hookKeyPaths() {
-    let RTLD_DEFAULT = UnsafeMutableRawPointer(bitPattern: -2)
-    guard let original = dlsym(RTLD_DEFAULT, ViewBodyKeyPaths.keyPathFuncName) else {
-        print("⚠️ Could not find original symbol: \(ViewBodyKeyPaths.keyPathFuncName)")
-        return
-    }
-    guard let replacer = dlsym(RTLD_DEFAULT, "injection_getKeyPath") else {
-        print("⚠️ Could not find replacement symbol: injection_getKeyPath")
-        return
-    }
+public func hookKeyPaths(original: UnsafeMutableRawPointer,
+                         replacer: UnsafeMutableRawPointer) {
+// Use of dlsym() here causes Xcode 16's previews to deadlock and time out.
+//    let RTLD_DEFAULT = UnsafeMutableRawPointer(bitPattern: -2)
+//    guard let original = dlsym(RTLD_DEFAULT, ViewBodyKeyPaths.keyPathFuncName) else {
+//        print("⚠️ Could not find original symbol: \(ViewBodyKeyPaths.keyPathFuncName)")
+//        return
+//    }
+//    guard let replacer = dlsym(RTLD_DEFAULT, "injection_getKeyPath") else {
+//        print("⚠️ Could not find replacement symbol: injection_getKeyPath")
+//        return
+//    }
     ViewBodyKeyPaths.save_getKeyPath = autoBitCast(original)
     var keyPathRebinding = [rebinding(name: strdup(ViewBodyKeyPaths.keyPathFuncName),
                                       replacement: replacer, replaced: nil)]

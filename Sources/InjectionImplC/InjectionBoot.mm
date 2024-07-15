@@ -18,14 +18,9 @@
 /// This will be called as soon as the package is loaded into memory.
 + (void)load {
     // Hook Swift runtime's swift_getKeyPath
-    typedef void (*HKP)();
-    if (getenv("INJECTION_KEYPATHS") ||
-        dlsym(RTLD_DEFAULT, "$s22ComposableArchitecture6LoggerCN"))
-        #if SWIFT_PACKAGE
-        if (HKP hookKeyPaths = (HKP)dlsym(RTLD_DEFAULT, "hookKeyPaths"))
-        #endif
-            hookKeyPaths();
-    // If InjectionLite clas present, start it up.
+    hookKeyPaths((void *)swift_getKeyPath,
+                 (void *)injection_getKeyPath);
+    // If InjectionLite class present, start it up.
     static NSObject *singleton;
     if (Class InjectionLite = objc_getClass("InjectionLite"))
         singleton = [[InjectionLite alloc] init];
