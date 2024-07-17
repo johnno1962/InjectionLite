@@ -50,6 +50,11 @@ public struct Reloader {
                 build phase containg the script "copy_test_frameworks.sh" from the \
                 InjectionNext.app bundle and have run tests at some point in the past.
                 """)
+            } else if msg.contains("have different Team IDs") {
+                log("""
+                ℹ️ To inject a MacOS app you'll need to "Disable Library \
+                Validation" under the "Hardened runtime" during developemnt.
+                """)
             }
         }
     }

@@ -13,6 +13,13 @@
 #import <objc/runtime.h>
 #import <dlfcn.h>
 
+
+extern "C" {
+extern void hookKeyPaths(void *original, void *replacement);
+extern const void *swift_getKeyPath(void *, const void *);
+extern const void *injection_getKeyPath(void *, const void *);
+}
+
 @implementation NSObject(InjectionBoot)
 
 /// This will be called as soon as the package is loaded into memory.

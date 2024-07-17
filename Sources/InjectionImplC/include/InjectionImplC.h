@@ -12,14 +12,4 @@
 @interface NSObject(InjectionBoot)
 + (void)runXCTestCase:(Class)aTestCase;
 @end
-
-#if __cplusplus
-extern "C" {
-#endif
-extern void hookKeyPaths(void *original, void *replacement);
-extern const void *swift_getKeyPath(void *, const void *);
-extern const void *injection_getKeyPath(void *, const void *);
-#if __cplusplus
-}
-#endif
 #endif
