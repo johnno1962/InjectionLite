@@ -208,13 +208,13 @@ public struct Reloader {
                        &classMetadata.pointee.IVarDestroyer)
     }
 
-    var cachedInfo = [Reloader.SIMP: DLKit.SymbolName]()
-    mutating func cachedGetInfo(image: ImageSymbols,
-                                impl: Reloader.SIMP) -> DLKit.SymbolName? {
+    static var cachedInfo = [Reloader.SIMP: ImageSymbols.DLKInfo]()
+    static func cachedGetInfo(image: ImageSymbols,
+                              impl: Reloader.SIMP) -> ImageSymbols.DLKInfo? {
         if let cached = cachedInfo[impl] {
             return cached
         }
-        let lookedup = image[impl]?.name
+        let lookedup = image.getInfo(address: impl)
         cachedInfo[impl] = lookedup
         return lookedup
     }
@@ -229,9 +229,9 @@ public struct Reloader {
                 for slot in 1..<1+slots {
                     guard let impl = newSlots[slot] else { continue }
                     let lastName =
-                        cachedGetInfo(image: lastLoaded, impl: impl)
+                        Self.cachedGetInfo(image: lastLoaded, impl: impl)?.name
                     if let symname = lastName ??
-                        cachedGetInfo(image: allImages, impl: impl),
+                        Self.cachedGetInfo(image: allImages, impl: impl)?.name,
                        Self.injectableSymbol(symname) {
                         let symstr = String(cString: symname)
                         if lastName == nil,

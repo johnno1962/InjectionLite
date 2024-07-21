@@ -45,9 +45,9 @@ extension Reloader {
     #elseif os(visionOS)
     static let sdk = "xrOS"
     #elseif targetEnvironment(simulator)
-    static let sdk = "iOS"
+    static let sdk = "iOS_Simulator"
     #else
-    static let sdk = "maciOS"
+    static let sdk = "iOS"
     #endif
     public static let appName = Bundle.main.executableURL?.lastPathComponent ?? "Unknown"
     public static var cacheFile = "/tmp/\(appName)_\(sdk)_builds.plist"

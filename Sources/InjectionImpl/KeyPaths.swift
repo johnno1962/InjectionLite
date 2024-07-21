@@ -67,11 +67,10 @@ public func injection_getKeyPath(pattern: UnsafeMutableRawPointer,
         }
         ViewBodyKeyPaths.hasInjected = true
     }
-    var info = Dl_info()
     for caller in Thread.callStackReturnAddresses.dropFirst() {
-        guard let caller = caller.pointerValue,
-              dladdr(caller, &info) != 0, let symbol = info.dli_sname,
-              let callerDecl = symbol.demangled else {
+        guard let caller = caller.pointerValue, let info =
+                Reloader.cachedGetInfo(image: DLKit.allImages, impl: caller),
+              let callerDecl = info.name.demangled else {
             continue
         }
         if !callerDecl.hasSuffix(".body.getter : some") {
@@ -86,7 +85,7 @@ public func injection_getKeyPath(pattern: UnsafeMutableRawPointer,
 //        print(callerSym, ins)
         var body = ViewBodyKeyPaths.cache[callerKey] ?? ViewBodyKeyPaths()
         // reset keyPath counter ?
-        let offset = caller-info.dli_saddr
+        let offset = caller-info.info.dli_saddr
         if offset <= body.lastOffset {
             body.keyPathNumber = 0
             body.recycled = false

@@ -25,8 +25,9 @@ extern const void *injection_getKeyPath(void *, const void *);
 /// This will be called as soon as the package is loaded into memory.
 + (void)load {
     // Hook Swift runtime's swift_getKeyPath
-    hookKeyPaths((void *)swift_getKeyPath,
-                 (void *)injection_getKeyPath);
+    if (!getenv("INJECTION_NOKEYPATHS"))
+        hookKeyPaths((void *)swift_getKeyPath,
+                     (void *)injection_getKeyPath);
     // If InjectionLite class present, start it up.
     static NSObject *singleton;
     if (Class InjectionLite = objc_getClass("InjectionLite"))
