@@ -18,6 +18,7 @@ extern "C" {
 extern void hookKeyPaths(void *original, void *replacement);
 extern const void *swift_getKeyPath(void *, const void *);
 extern const void *injection_getKeyPath(void *, const void *);
+extern void *DLKit_appImagesContain(const char *symbol);
 }
 
 @implementation NSObject(InjectionBoot)
@@ -25,7 +26,8 @@ extern const void *injection_getKeyPath(void *, const void *);
 /// This will be called as soon as the package is loaded into memory.
 + (void)load {
     // Hook Swift runtime's swift_getKeyPath
-    if (!getenv("INJECTION_NOKEYPATHS"))
+    if (!getenv("INJECTION_NOKEYPATHS") && (getenv("INJECTION_KEYPATHS") ||
+        DLKit_appImagesContain("_$s22ComposableArchitecture6LoggerCN")))
         hookKeyPaths((void *)swift_getKeyPath,
                      (void *)injection_getKeyPath);
     // If InjectionLite class present, start it up.
