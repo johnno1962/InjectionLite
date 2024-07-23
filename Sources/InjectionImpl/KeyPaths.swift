@@ -15,9 +15,11 @@
 
 #if DEBUG || !SWIFT_PACKAGE
 import Foundation
+#if canImport(SwiftRegexD)
 import SwiftRegexD
 import fishhookD
 import DLKitD
+#endif
 
 private struct ViewBodyKeyPaths {
     typealias KeyPathFunc = @convention(c) (UnsafeMutableRawPointer,

@@ -12,9 +12,11 @@
 //
 #if DEBUG
 import Foundation
+#if canImport(SwiftRegexD)
 import SwiftRegexD
 import InjectionImplC
 import DLKitD
+#endif
 
 #if os(macOS)
 import AppKit

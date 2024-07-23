@@ -10,9 +10,11 @@
 //  Created by John Holdsworth on 25/02/2023.
 //
 #if DEBUG
-import InjectionImplC
 import Foundation
+#if canImport(InjectionImplC)
+import InjectionImplC
 import DLKitD
+#endif
 
 @objc public protocol SwiftInjected {
     @objc optional func injected()

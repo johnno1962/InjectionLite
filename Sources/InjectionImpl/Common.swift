@@ -8,7 +8,9 @@
 //
 #if DEBUG
 import Foundation
+#if canImport(InjectionImplC)
 import InjectionImplC
+#endif
 
 // Inhibit loading of injection bundle.
 @objc(InjectionClient)
