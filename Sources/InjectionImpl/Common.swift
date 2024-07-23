@@ -6,7 +6,7 @@
 //
 //  A collection of code and state shared by InjectionImpl.
 //
-#if DEBUG
+#if DEBUG || !SWIFT_PACKAGE
 import Foundation
 #if canImport(InjectionImplC)
 import InjectionImplC

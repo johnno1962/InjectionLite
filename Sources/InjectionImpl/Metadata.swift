@@ -5,7 +5,7 @@
 //
 //  The layout of the meta-data for all classes which is followed by the vtable.
 //
-#if DEBUG
+#if DEBUG || !SWIFT_PACKAGE
 import Foundation
 
 extension Reloader {

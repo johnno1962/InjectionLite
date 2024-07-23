@@ -51,6 +51,7 @@ public func hookKeyPaths(original: UnsafeMutableRawPointer,
 //        print("⚠️ Could not find replacement symbol: injection_getKeyPath")
 //        return
 //    }
+    log("ℹ️ Intercepting keypaths for when their types are injected.")
     ViewBodyKeyPaths.save_getKeyPath = autoBitCast(original)
     var keyPathRebinding = [rebinding(name: strdup(ViewBodyKeyPaths.keyPathFuncName),
                                       replacement: replacer, replaced: nil)]

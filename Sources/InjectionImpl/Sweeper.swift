@@ -9,7 +9,7 @@
 //
 //  Created by John Holdsworth on 25/02/2023.
 //
-#if DEBUG
+#if DEBUG || !SWIFT_PACKAGE
 import Foundation
 #if canImport(InjectionImplC)
 import InjectionImplC
