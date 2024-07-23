@@ -3,7 +3,7 @@
 //
 //  Created by John Holdsworth on 13/03/2023.
 //
-#if DEBUG
+#if DEBUG || !SWIFT_PACKAGE
 #import <Foundation/Foundation.h>
 #define APP_NAME "InjectionLite"
 #define APP_PREFIX "🔥 "
