@@ -25,6 +25,8 @@ extern void *DLKit_appImagesContain(const char *symbol);
 
 /// This will be called as soon as the package is loaded into memory.
 + (void)load {
+    if ([NSTemporaryDirectory() containsString:@"/UserData/Previews/"])
+        return;
     // Hook Swift runtime's swift_getKeyPath
     if (!getenv("INJECTION_NOKEYPATHS") && (getenv("INJECTION_KEYPATHS") ||
         DLKit_appImagesContain("_$s22ComposableArchitecture6LoggerCN")))
