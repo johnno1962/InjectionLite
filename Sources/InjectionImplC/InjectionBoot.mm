@@ -23,9 +23,14 @@ extern void *DLKit_appImagesContain(const char *symbol);
 
 @implementation NSObject(InjectionBoot)
 
++ (BOOL)InjectionBoot_inPreview {
+    return [NSTemporaryDirectory() containsString:@"/UserData/Previews/"]
+      || strstr(getenv("PACKAGE_RESOURCE_BUNDLE_PATH")?:"", "/Previews/");
+}
+
 /// This will be called as soon as the package is loaded into memory.
 + (void)load {
-    if ([NSTemporaryDirectory() containsString:@"/UserData/Previews/"])
+    if ([self InjectionBoot_inPreview])
         return;
     // Hook Swift runtime's swift_getKeyPath
     if (!getenv("INJECTION_NOKEYPATHS") && (getenv("INJECTION_KEYPATHS") ||
