@@ -10,6 +10,7 @@
 #define VAPOR_SYMBOL "$s10RoutingKit10ParametersVN"
 
 @interface NSObject(InjectionBoot)
++ (BOOL)InjectionBoot_inPreview;
 + (void)runXCTestCase:(Class)aTestCase;
 @end
 #endif
