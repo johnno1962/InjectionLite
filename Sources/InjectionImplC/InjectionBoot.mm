@@ -13,7 +13,6 @@
 #import <objc/runtime.h>
 #import <dlfcn.h>
 
-
 extern "C" {
 extern void hookKeyPaths(void *original, void *replacement);
 extern const void *swift_getKeyPath(void *, const void *);
@@ -23,9 +22,11 @@ extern void *DLKit_appImagesContain(const char *symbol);
 
 @implementation NSObject(InjectionBoot)
 
-+ (BOOL)InjectionBoot_inPreview {
++ (BOOL)InjectionBoot_inPreview { // inhibit injection in Xcode previews
     return [NSTemporaryDirectory() containsString:@"/UserData/Previews/"]
-      || strstr(getenv("PACKAGE_RESOURCE_BUNDLE_PATH")?:"", "/Previews/");
+      || strstr(getenv("PACKAGE_RESOURCE_BUNDLE_PATH")?:"", "/Previews/")
+      || getenv("XCTestBundlePath") || getenv("XCTestSessionIdentifier")
+      || getenv("XCTestConfigurationFilePath"); // or when running tests
 }
 
 /// This will be called as soon as the package is loaded into memory.
