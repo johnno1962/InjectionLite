@@ -343,7 +343,8 @@ public struct Reloader {
     /// A way to determine if a file being injected is an XCTest
     func injectingXCTest(in dylib: String) -> Bool {
         if let object = NSData(contentsOfFile: dylib),
-           memmem(object.bytes, object.count, "XCTest", 6) != nil,
+           memmem(object.bytes, object.count, "XCTest", 6) != nil ||
+            memmem(object.bytes, object.count, "Quick", 5) != nil,
            object.count != 0 { return true }
         return false
     }
@@ -359,13 +360,15 @@ public struct Reloader {
                        "usr/lib/libXCTestSwiftSupport.dylib")
         #endif
         // Are there any .xctest bundles packaged with the app? If so, load them
-        if let plugins = Bundle.main.path(forResource: "PlugIns", ofType: nil),
+        if let plugins = Bundle.main.path(forResource: "PlugIns", ofType: nil)
+                      ?? Bundle.main.path(forResource: "Plugins", ofType: nil),
            let contents = try? FileManager.default
             .contentsOfDirectory(atPath: plugins) {
-            for xctest in contents {
+            for xctest in contents where xctest.hasSuffix(".xctest") {
                 let name = xctest
                     .replacingOccurrences(of: ".xctest", with: "")
                 if name != xctest {
+                    log("ℹ️ Loading app plugin "+xctest+"/"+name)
                     _ = DLKit.load(dylib: plugins+"/"+xctest+"/"+name)
                 }
             }

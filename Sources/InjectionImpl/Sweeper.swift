@@ -42,7 +42,7 @@ public struct Sweeper {
                         testQueue.suspend()
                         let timer = Timer(timeInterval: 0, repeats:false, block: { _ in
                             for newClass in testClasses {
-                                log("Running test \(newClass)")
+                                log("Running test \(_typeName(newClass))")
                                 NSObject.runXCTestCase(newClass)
                             }
                             testQueue.resume()
