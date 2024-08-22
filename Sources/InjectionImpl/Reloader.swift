@@ -48,9 +48,9 @@ public struct Reloader {
                         objc_getClass("InjectionNext") != nil {
                 log("""
                 ℹ️ If the error talks of Testing.framework and you are injecting \
-                a test on a device, make sure you have enabled testing and added a \
-                build phase containg the script "copy_test_frameworks.sh" from the \
-                InjectionNext.app bundle and have run tests at some point in the past.
+                a test on a device, make sure you have and added a "Build Phase" \
+                running the script "copy_bundle.sh" from the InjectionNext.app \
+                bundle, enabled devices and have run tests some time in the past.
                 """)
             } else if msg.contains("have different Team IDs") {
                 log("""
