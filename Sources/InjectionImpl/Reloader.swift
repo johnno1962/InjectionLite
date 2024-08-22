@@ -350,7 +350,7 @@ public struct Reloader {
     }
 
     lazy var loadXCTest: Bool = {
-        #if targetEnvironment(simulator) || os(macOS)
+        #if targetEnvironment(simulator) && SWIFT_PACKAGE || os(macOS)
         let platformDev = Self.xcodeDev +
             "/Platforms/\(Self.platform).platform/Developer/"
 
@@ -359,6 +359,14 @@ public struct Reloader {
         _ = DLKit.load(dylib: platformDev +
                        "usr/lib/libXCTestSwiftSupport.dylib")
         #endif
+        
+        if let fwork = Bundle(for: InjectionClient.self).privateFrameworksURL?
+            .appendingPathComponent("StoreKitTest.framework/StoreKitTest").path,
+           FileManager.default.fileExists(atPath: fwork) {
+            log("ℹ️ Loading "+fwork)
+            _ = DLKit.load(dylib: fwork)
+        }
+        
         // Are there any .xctest bundles packaged with the app? If so, load them
         if let plugins = Bundle.main.path(forResource: "PlugIns", ofType: nil)
                       ?? Bundle.main.path(forResource: "Plugins", ofType: nil),
