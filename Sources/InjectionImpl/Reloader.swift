@@ -73,12 +73,18 @@ public struct Reloader {
     
     public typealias ClassInfo = (old: [AnyClass], new: [AnyClass],
                                   generics: Set<String>)
+    
+    @discardableResult
+    func dyload(dylib: String) -> ImageSymbols? {
+        detail("Loading "+dylib)
+        return DLKit.load(dylib: dylib)
+    }
 
     public mutating func loadAndPatch(in dylib: String) ->
         (image: ImageSymbols, classes: ClassInfo)? {
         bench("Start")
         guard !injectingXCTest(in: dylib) || loadXCTest, // load XCText libs.
-              let image = DLKit.load(dylib: dylib) else { return nil }
+              let image = dyload(dylib: dylib) else { return nil }
         
         let classes = patchClasses(in: image)
         if classes.new.count != 0 {
@@ -354,22 +360,24 @@ public struct Reloader {
         let platformDev = Self.xcodeDev +
             "/Platforms/\(Self.platform).platform/Developer/"
 
-        _ = DLKit.load(dylib: platformDev +
-                       "Library/Frameworks/XCTest.framework/XCTest")
-        _ = DLKit.load(dylib: platformDev +
-                       "usr/lib/libXCTestSwiftSupport.dylib")
+        dyload(dylib: platformDev +
+               "Library/Frameworks/XCTest.framework/XCTest")
+        dyload(dylib: platformDev +
+               "usr/lib/libXCTestSwiftSupport.dylib")
         #endif
         
-        if let fwork = Bundle(for: InjectionClient.self).privateFrameworksURL?
+        let inBundle = Bundle(for: InjectionClient.self)
+        if let fwork = Bundle.main.privateFrameworksURL?
             .appendingPathComponent("StoreKitTest.framework/StoreKitTest").path,
            FileManager.default.fileExists(atPath: fwork) {
             log("ℹ️ Loading "+fwork)
-            _ = DLKit.load(dylib: fwork)
+            dyload(dylib: fwork)
         }
         
         // Are there any .xctest bundles packaged with the app? If so, load them
         if let plugins = Bundle.main.path(forResource: "PlugIns", ofType: nil)
-                      ?? Bundle.main.path(forResource: "Plugins", ofType: nil),
+                      ?? Bundle.main.path(forResource: "Plugins", ofType: nil)
+                      ?? inBundle.path(forResource: "PlugIns", ofType: nil),
            let contents = try? FileManager.default
             .contentsOfDirectory(atPath: plugins) {
             for xctest in contents where xctest.hasSuffix(".xctest") {
@@ -377,7 +385,7 @@ public struct Reloader {
                     .replacingOccurrences(of: ".xctest", with: "")
                 if name != xctest {
                     log("ℹ️ Loading app plugin "+xctest+"/"+name)
-                    _ = DLKit.load(dylib: plugins+"/"+xctest+"/"+name)
+                    dyload(dylib: plugins+"/"+xctest+"/"+name)
                 }
             }
         }
