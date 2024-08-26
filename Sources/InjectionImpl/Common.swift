@@ -56,5 +56,14 @@ extension Reloader {
     // Defaults for Xcode location and platform
     public static var xcodeDev = "/Applications/Xcode.app/Contents/Developer"
     public static var platform = "iPhoneSimulator"
+
+    /// A way to determine if a file being injected is an XCTest
+    public static func injectingXCTest(in dylib: String) -> Bool {
+        if let object = NSData(contentsOfFile: dylib),
+           memmem(object.bytes, object.count, "XCTest", 6) != nil ||
+            memmem(object.bytes, object.count, "Quick", 5) != nil,
+           object.count != 0 { return true }
+        return false
+    }
 }
 #endif

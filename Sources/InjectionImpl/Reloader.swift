@@ -83,7 +83,7 @@ public struct Reloader {
     public mutating func loadAndPatch(in dylib: String) ->
         (image: ImageSymbols, classes: ClassInfo)? {
         bench("Start")
-        guard !injectingXCTest(in: dylib) || loadXCTest, // load XCText libs.
+        guard !Self.injectingXCTest(in: dylib) || loadXCTest, // load XCText libs.
               let image = dyload(dylib: dylib) else { return nil }
         
         let classes = patchClasses(in: image)
@@ -346,15 +346,6 @@ public struct Reloader {
         return rebound
     }
 
-    /// A way to determine if a file being injected is an XCTest
-    func injectingXCTest(in dylib: String) -> Bool {
-        if let object = NSData(contentsOfFile: dylib),
-           memmem(object.bytes, object.count, "XCTest", 6) != nil ||
-            memmem(object.bytes, object.count, "Quick", 5) != nil,
-           object.count != 0 { return true }
-        return false
-    }
-
     lazy var loadXCTest: Bool = {
         #if targetEnvironment(simulator) && SWIFT_PACKAGE || os(macOS)
         let platformDev = Self.xcodeDev +
@@ -375,10 +366,9 @@ public struct Reloader {
         }
         
         // Are there any .xctest bundles packaged with the app? If so, load them
-        if let plugins = Bundle.main.path(forResource: "PlugIns", ofType: nil)
-                      ?? Bundle.main.path(forResource: "Plugins", ofType: nil)
-                      ?? inBundle.path(forResource: "PlugIns", ofType: nil),
-           let contents = try? FileManager.default
+        let plugins = Bundle.main.path(forResource: "PlugIns", ofType: nil)
+                   ?? NSTemporaryDirectory()
+        if let contents = try? FileManager.default
             .contentsOfDirectory(atPath: plugins) {
             for xctest in contents where xctest.hasSuffix(".xctest") {
                 let name = xctest
