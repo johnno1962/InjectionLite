@@ -182,8 +182,12 @@ public struct Sweeper {
 class SwiftSweeper {
 
     /// Seeds for the start of the "sweep" to implement instance level injected() method.
+    #if !os(watchOS)
     static let app = OSApplication.shared
     static var seeds: [Any] = [app.delegate as Any] + app.windows
+    #else
+    static var seeds = [Any]()
+    #endif
     static var current: SwiftSweeper?
 
     let instanceTask: (AnyObject) -> Void

@@ -21,7 +21,7 @@ import DLKitD
 #if os(macOS)
 import AppKit
 typealias OSApplication = NSApplication
-#else
+#elseif !os(watchOS)
 import UIKit
 typealias OSApplication = UIApplication
 #endif
