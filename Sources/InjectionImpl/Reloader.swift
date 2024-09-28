@@ -32,8 +32,18 @@ public struct Reloader {
     public static var unhider: (() -> Void)? // Not currently used.
     public static var injectionNumber = 0
     public let sweeper = Sweeper() // implements instance level @objc injected()
+    static var loadErrors = [String]()
 
-    public init() {
+    public init() {}
+
+    @discardableResult
+    func dyload(dylib: String) -> ImageSymbols? {
+        detail("Loading "+dylib)
+        let save = DLKit.logger
+        defer { DLKit.logger = save }
+        func log(_ msg: String) {
+            Reloader.loadErrors.append(msg)
+        }
         DLKit.logger = { msg in
             log(msg)
             if let symbol: String = msg[#"symbol not found in flat namespace '(.*A\d*_)'"#] {
@@ -59,6 +69,7 @@ public struct Reloader {
                 """)
             }
         }
+        return DLKit.load(dylib: dylib)
     }
 
     @discardableResult
@@ -74,17 +85,15 @@ public struct Reloader {
     public typealias ClassInfo = (old: [AnyClass], new: [AnyClass],
                                   generics: Set<String>)
     
-    @discardableResult
-    func dyload(dylib: String) -> ImageSymbols? {
-        detail("Loading "+dylib)
-        return DLKit.load(dylib: dylib)
-    }
-
     public mutating func loadAndPatch(in dylib: String) ->
         (image: ImageSymbols, classes: ClassInfo)? {
         bench("Start")
         guard !Self.injectingXCTest(in: dylib) || loadXCTest, // load XCText libs.
-              let image = dyload(dylib: dylib) else { return nil }
+              let image = dyload(dylib: dylib) else {
+            Self.loadErrors.forEach { log($0) }
+            Self.loadErrors.removeAll()
+            return nil
+        }
         
         let classes = patchClasses(in: image)
         if classes.new.count != 0 {
