@@ -60,7 +60,9 @@ public struct Reloader {
                 ℹ️ If the error talks of Testing.framework and you are injecting \
                 a test on a device, make sure you have and added a "Build Phase" \
                 running the script "copy_bundle.sh" from the InjectionNext.app \
-                bundle, enabled devices and have run tests some time in the past.
+                bundle, enabled devices and have run tests some time in the past. \
+                If you are not tesing on a device make sure "Enable testing on \
+                device" is not selected under the "Enable Devices" menu item.
                 """)
             } else if msg.contains("have different Team IDs") {
                 log("""
