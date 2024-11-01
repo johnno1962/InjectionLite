@@ -23,10 +23,11 @@ extern void *DLKit_appImagesContain(const char *symbol);
 @implementation NSObject(InjectionBoot)
 
 + (BOOL)InjectionBoot_inPreview { // inhibit injection in Xcode previews
-    return [NSTemporaryDirectory() containsString:@"/UserData/Previews/"]
-      || strstr(getenv("PACKAGE_RESOURCE_BUNDLE_PATH")?:"", "/Previews/")
+    // See: https://forums.developer.apple.com/forums/thread/761439
+    return getenv("XCODE_RUNNING_FOR_PREVIEWS")
       || getenv("XCTestBundlePath") || getenv("XCTestSessionIdentifier")
       || getenv("XCTestConfigurationFilePath"); // or when running tests
+    // See: https://github.com/pointfreeco/swift-issue-reporting/blob/main/Sources/IssueReporting/IsTesting.swift#L29
 }
 
 /// This will be called as soon as the package is loaded into memory.
