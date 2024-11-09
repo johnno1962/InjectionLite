@@ -12,7 +12,7 @@
 //  backdating the event stream to just before the app launched.
 //  This class is "showing its age".
 //
-#if DEBUG
+#if DEBUG || !SWIFT_PACKAGE
 import Foundation
 
 public class FileWatcher: NSObject {
@@ -93,6 +93,12 @@ public class FileWatcher: NSObject {
         _ = FSEventStreamStart(fileEvents)
         self.fileEvents = fileEvents
         }
+        initStream(eventsStart)
+    }
+    
+    func restart() {
+        eventsStart = FSEventStreamEventId(kFSEventStreamEventIdSinceNow)
+        FSEventStreamStop(fileEvents)
         initStream(eventsStart)
     }
 

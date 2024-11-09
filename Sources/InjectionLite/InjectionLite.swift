@@ -17,55 +17,13 @@ import Foundation
 import DLKitD
 
 @objc(InjectionLite)
-open class InjectionLite: NSObject {
-
-    var watcher: FileWatcher?
+open class InjectionLite: InjectionBase {
     var recompiler = Recompiler()
     var reloader = Reloader()
-    
-    /// Called from InjectionBoot.m, setup filewatch and wait...
-    public override init() {
-        super.init()
-        Reloader.injectionQueue.async {
-            self.performInjection()
-        }
-    }
 
-    func performInjection() {
-        #if !targetEnvironment(simulator) && !os(macOS)
-        log(APP_NAME+": can only be used in the simulator or unsandboxed macOS")
-        #endif
-        let home = NSHomeDirectory()
-            .replacingOccurrences(of: #"(/Users/[^/]+).*"#,
-                                  with: "$1", options: .regularExpression)
-        var dirs = [home]
-        let library = home+"/Library"
-        if let extra = getenv("INJECTION_DIRECTORIES") {
-            dirs = String(cString: extra).components(separatedBy: ",")
-                .map { $0.replacingOccurrences(of: #"^~"#,
-                   with: home, options: .regularExpression) } // expand ~ in paths
-            if FileWatcher.derivedLog == nil && dirs.allSatisfy({
-                $0 != home && !$0.hasPrefix(library) }) {
-                log("⚠️ INJECTION_DIRECTORIES should contain ~/Library")
-                dirs.append(library)
-            }
-        }
-
-        let isVapour = Reloader.injectionQueue != .main
-        watcher = FileWatcher(roots: dirs, callback: { filesChanged in
-            for file in filesChanged {
-                self.inject(source: file)
-            }
-        }, runLoop: isVapour ? CFRunLoopGetCurrent() : nil)
-        log(APP_NAME+": Watching for source changes under \(home)/...")
-        if isVapour {
-            CFRunLoopRun()
-        }
-    }
-
-    func inject(source: String) {
+    override func inject(source: String) {
         let usingCached = recompiler.longTermCache[source] != nil
-        if let dylib = recompiler.recompile(source: source),
+        if let dylib = recompiler.recompile(source: source, dylink: true),
            let (image, classes) = reloader.loadAndPatch(in: dylib) {
             reloader.sweeper.sweepAndRunTests(image: image, classes: classes)
         } else if usingCached { // Try again once, after reparsing logs.

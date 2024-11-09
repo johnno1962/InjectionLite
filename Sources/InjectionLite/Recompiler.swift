@@ -12,11 +12,17 @@
 //  Created by John Holdsworth on 25/02/2023.
 //
 
-#if DEBUG
+#if DEBUG || !SWIFT_PACKAGE
+#if canImport(InjectionImplC)
 import InjectionImplC
 import InjectionImpl
+#endif
 import Foundation
+#if canImport(PopenD)
 import PopenD
+#else
+import Popen
+#endif
 
 public struct Recompiler {
 
@@ -31,7 +37,7 @@ public struct Recompiler {
     }
 
     /// Recompile a source to produce a dynamic library that can be loaded
-    mutating func recompile(source: String) -> String? {
+    mutating func recompile(source: String, dylink: Bool) -> String? {
         guard let command = longTermCache[source] as? String ??
                 parser.command(for: source) else {
             log("""
@@ -59,6 +65,10 @@ public struct Recompiler {
             longTermCache[source] = command
             writeToCache()
         }
+        if !dylink {
+            return objectFile
+        }
+
         guard let dylib = link(objectFile: objectFile, command) else {
             return nil
         }

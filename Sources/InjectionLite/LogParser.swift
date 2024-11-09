@@ -10,10 +10,16 @@
 //
 //  Created by John Holdsworth on 25/02/2023.
 //
-#if DEBUG
+#if DEBUG || !SWIFT_PACKAGE
+#if canImport(InjectionImpl)
 import InjectionImpl
+#endif
 import Foundation
+#if canImport(PopenD)
 import PopenD
+#else
+import Popen
+#endif
 
 struct LogParser {
 
