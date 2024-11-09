@@ -30,7 +30,6 @@ public struct Reloader {
 
     public static var lastTime = Date.timeIntervalSinceReferenceDate // benchmarking
     public static var unhider: (() -> Void)? // Not currently used.
-    public static var injectionNumber = 0
     public let sweeper = Sweeper() // implements instance level @objc injected()
     static var loadErrors = [String]()
 

@@ -33,9 +33,10 @@ public func detail(_ str: @autoclosure () -> String) -> Bool {
 }
 
 extension Reloader {
+    public static var injectionNumber = 0
     // Injection is relatively thread safe as interposes etc. are atomic but..
     #if os(macOS)
-    public static let injectionQueue = DispatchQueue(label: "InjectionQueue")
+    public static var injectionQueue = DispatchQueue(label: "InjectionQueue")
     #else
     public static let injectionQueue = DispatchQueue.main
     #endif
