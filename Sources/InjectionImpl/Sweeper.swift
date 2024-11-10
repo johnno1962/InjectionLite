@@ -155,10 +155,9 @@ public struct Sweeper {
             (slots, oldSlots, _) in
             for slotIndex in 1..<1+slots {
                 guard let existing = oldSlots[slotIndex],
-                      let symname = lastLoaded[existing]?.name ??
-                        DLKit.allImages[existing]?.name,
-                      Reloader.injectableSymbol(symname) else { continue }
-                let symbol = String(cString: symname)
+                      let info = lastLoaded[existing] ?? DLKit.allImages[existing],
+                      Reloader.injectableSymbol(info.name) else { continue }
+                let symname = info.name, symbol = String(cString: symname)
                 let demangled = symname.demangled ?? symbol
 
                 guard let replacement = lastLoaded[symname] ??
@@ -168,7 +167,7 @@ public struct Sweeper {
                 }
                 if replacement != existing {
                     oldSlots[slotIndex] = replacement
-                    detail("Patched \(replacement) \(demangled)")
+                    detail("Patched[\(slotIndex)] \(replacement)/\(info.owner.imageKey) \(demangled)")
                     patched += 1
                 }
             }

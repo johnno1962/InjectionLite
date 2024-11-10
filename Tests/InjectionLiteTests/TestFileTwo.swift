@@ -1,14 +1,14 @@
 
 import Foundation
 
-class TestSubClass: TestSuperClass<Int> {
+class TestSubClass: GenericSuper<Int> {
     func fileTwoPath() -> String {
         return #filePath
     }
     class func classValue() -> String {
-        return "VALUE476560"
+        return "VALUE234720"
     }
     func value() -> String {
-        return "VALUE476560"
+        return "VALUE234720"
     }
 }

@@ -1,17 +1,28 @@
 import XCTest
 @testable import InjectionLite
+@testable import InjectionImpl
 
 final class InjectionLiteTests: XCTestCase {
 
     static var shared: InjectionLiteTests?
     var expect: XCTestExpectation?
+    var engine: InjectionLite?
     let c = TestSubClass(t: 99)
     let s = TestStruct()
     static var value = "VALUE\(getpid())"
     static var checks = Set([77, 88.5, 99, "__"].map { value+"-\($0)" })
 
     override func setUp() {
+        let home = NSHomeDirectory()
+            .replacingOccurrences(of: #"(/Users/[^/]+).*"#,
+                                  with: "$1", options: .regularExpression)
+        let dir = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent().path
         setenv("INJECTION_DETAIL", "1", 1)
+        setenv("INJECTION_BENCH", "1", 1)
+        setenv("INJECTION_DIRECTORIES",
+               home+"/Library/Developer,"+home, 1)
+        engine = InjectionLite()
         Self.shared = self
         flushInjection()
 
@@ -61,7 +72,10 @@ final class InjectionLiteTests: XCTestCase {
         XCTAssertEqual(topLevelValue(), value, "top level")
         XCTAssertEqual(TestStruct.staticValue(), value, "struct static")
         XCTAssertEqual(s.value(), value, "struct method")
-        XCTAssertEqual(TestSuperClass<Int>.staticValue(), value, "class static")
+        XCTAssertEqual(GenericSuper<Int>.staticValue(), value, "class static")
+        XCTAssertEqual(s.c1.superValue(), value, "generic Int")
+        XCTAssertEqual(s.c2.superValue(), value, "generic Double")
+        XCTAssertEqual(s.c3.superValue(), value, "generic String")
 
         let value2 = value + "0"
         expect = expectation(description: "File2")
@@ -73,6 +87,9 @@ final class InjectionLiteTests: XCTestCase {
         XCTAssertEqual(TestSubClass.staticValue(), value, "subclass static")
         XCTAssertEqual(TestSubClass.classValue(), value2, "subclass class")
         XCTAssertEqual(TestSubClass.classSuperValue(), value, "subclass method")
+        XCTAssertEqual(TestSubClass.staticBaseValue(), value, "baseclass static")
+        XCTAssertEqual(TestSubClass.classBaseValue(), value, "baseclass class")
+        XCTAssertEqual(c.baseValue(), value, "baseclass instance")
         XCTAssertEqual(Self.checks, [], "sweeper")
     }
 }

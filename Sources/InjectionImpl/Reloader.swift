@@ -246,24 +246,24 @@ public struct Reloader {
                 (slots, oldSlots, newSlots) in
                 for slot in 1..<1+slots {
                     guard let impl = newSlots[slot] else { continue }
-                    let lastName =
-                        Self.cachedGetInfo(image: lastLoaded, impl: impl)?.name
-                    if let symname = lastName ??
-                        Self.cachedGetInfo(image: allImages, impl: impl)?.name,
-                       Self.injectableSymbol(symname) {
-                        let symstr = String(cString: symname)
+                    let lastInfo =
+                        Self.cachedGetInfo(image: lastLoaded, impl: impl)
+                    if let info = lastInfo ??
+                        Self.cachedGetInfo(image: allImages, impl: impl),
+                       Self.injectableSymbol(info.name) {
+                        let symname = info.name, symstr = String(cString: symname)
                         if //lastName == nil,
                            let injectedSuper = Self.interposed[symstr] {
                             newSlots[slot] = injectedSuper
                         }
                         let symbol = symname.demangled ?? symstr
-                        bench("Patched slot[\(slot)] "+symbol)
+                        bench("Patching[\(slot)] "+symbol)
                         if symbol.contains(".getter : ") &&
                             symbol.hasSuffix(">") &&
                             !symbol.contains(".Optional<__C.") { continue }
                         if oldSlots[slot] != newSlots[slot] {
                             oldSlots[slot] = newSlots[slot]
-                            detail("Patched \(impl) \(symbol)")
+                            detail("Patched[\(slot)] \(impl)/\(info.owner.imageKey) \(symbol)")
                         }
                     }
                 }
