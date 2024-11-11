@@ -20,10 +20,6 @@ public class InjectionClient: NSObject {
 public func autoBitCast<IN,OUT>(_ x: IN) -> OUT {
     return unsafeBitCast(x, to: OUT.self)
 }
-/// Message Xcode console
-public func log(_ what: Any..., separator: String = " ") {
-    print(APP_PREFIX+what.map {"\($0)"}.joined(separator: separator))
-}
 @discardableResult /// Can be used in if statements
 public func detail(_ str: @autoclosure () -> String) -> Bool {
     if getenv("INJECTION_DETAIL") != nil {

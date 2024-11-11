@@ -56,7 +56,7 @@ public struct Recompiler {
         try? FileManager.default.removeItem(atPath: objectFile)
         if let errors = Popen.system(command+" -o \(objectFile)", errors: true) {
             detail("Processed: "+command+" -o \(objectFile)")
-            print(errors)
+            log(errors, prefix: "")
             log("⚠️ Recompilation failed")
             return nil
         }
@@ -80,8 +80,8 @@ public struct Recompiler {
             then /usr/bin/codesign --force -s - \"\(dylib)\";\
             else exit 1; fi)
             """
-        if let error = Popen.system(codesign, errors: true) {
-            print(error)
+        if let errors = Popen.system(codesign, errors: true) {
+            log(errors, prefix: "")
             log("⚠️ Codesign failed \(codesign)")
         }
         #endif
@@ -165,7 +165,7 @@ public struct Recompiler {
             """.replacingOccurrences(of: "__PLATFORM__", with: sdk)
 
         if let errors = Popen.system(linkCommand, errors: true) {
-            print(errors)
+            log(errors, prefix: "")
             log("⚠️ Linking failed")
             return nil
         }
