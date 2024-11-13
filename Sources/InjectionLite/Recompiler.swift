@@ -55,8 +55,9 @@ public struct Recompiler {
         let objectFile = tmpbase+".o"
         try? FileManager.default.removeItem(atPath: objectFile)
         if let errors = Popen.system(command+" -o \(objectFile)", errors: true) {
-            detail("Processed: "+command+" -o \(objectFile)")
-            log(errors, prefix: "")
+            log("Processing command: "+command+" -o \(objectFile)\n")
+            log("Current log: \(FileWatcher.derivedLog ?? "no log")")
+            log("⚠️ Compiler output:\n"+errors)
             log("⚠️ Recompilation failed")
             return nil
         }

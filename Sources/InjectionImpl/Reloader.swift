@@ -255,8 +255,9 @@ public struct Reloader {
                         Self.cachedGetInfo(image: lastLoaded, impl: impl)
                     if let info = lastInfo ??
                         Self.cachedGetInfo(image: allImages, impl: impl),
-                       Self.injectableSymbol(info.name) {
-                        let symname = info.name, symstr = String(cString: symname)
+                       let symname = info.name,
+                       Self.injectableSymbol(symname) {
+                        let symstr = String(cString: symname)
                         if //lastName == nil,
                            let injectedSuper = Self.interposed[symstr] {
                             newSlots[slot] = injectedSuper

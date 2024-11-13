@@ -156,8 +156,9 @@ public struct Sweeper {
             for slotIndex in 1..<1+slots {
                 guard let existing = oldSlots[slotIndex],
                       let info = lastLoaded[existing] ?? DLKit.allImages[existing],
-                      Reloader.injectableSymbol(info.name) else { continue }
-                let symname = info.name, symbol = String(cString: symname)
+                      let symname = info.name,
+                      Reloader.injectableSymbol(symname) else { continue }
+                let symbol = String(cString: symname)
                 let demangled = symname.demangled ?? symbol
 
                 guard let replacement = lastLoaded[symname] ??
