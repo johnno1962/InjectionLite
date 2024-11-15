@@ -6,7 +6,7 @@
 //  logs to find the command to recompile a Swift
 //  file. The command needs to be processed a little
 //  to only compile the injected Swift source (a.k.a
-//  "-primary-file" to produce a single object file.
+//  "-primary-file") to produce a single object file.
 //
 //  Created by John Holdsworth on 25/02/2023.
 //

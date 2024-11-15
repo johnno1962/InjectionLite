@@ -12,9 +12,19 @@ import Foundation
 import InjectionImplC
 #endif
 
-// Inhibit loading of injection bundle.
+/// Inhibit loading of injection bundle.
 @objc(InjectionClient)
 public class InjectionClient: NSObject {
+    @objc class func connectTo(_ host: String) -> NSObject? {
+        log("⚠️ App loading iOSInjection.bundle but also " +
+            "using InjectionLite/InjectionNext Swift Package.")
+        /// Inhibit running of code in iOSInjection.bundle if loaded.
+        return InjectionBoth()
+    }
+
+    public class InjectionBoth: NSObject {
+        @objc func run() {}
+    }
 }
 
 public func autoBitCast<IN,OUT>(_ x: IN) -> OUT {
