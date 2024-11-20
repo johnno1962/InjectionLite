@@ -56,14 +56,15 @@ public struct Recompiler {
         unlink(objectFile)
         while let errors = Popen.system(command+" -o \(objectFile)", errors: true) {
             if let (path, before, after): (String, String, String) = errors[
-                #"PCH file '(([^']+?-Bridging-Header-swift_)\w+(-clang_\w+.pch))' not found:"#] {
-                if let lerrors = Popen.system(
-                    "/bin/ln -s `ls -rt \(before)*\(after) | /usr/bin/head -1` \(path)",
-                    errors: true) {
-                    log("⚠️ Linking PCH failed "+lerrors)
-                } else {
+                #"PCH file '(([^']+?-Bridging-Header-swift_)\w+(-clang_\w+.pch))' not found:"#],
+               let mostRecent = Popen(
+                cmd: "/bin/ls -rt \(before)*\(after)")?.readLine() {
+                log("ℹ️ Linking \(path) to \(mostRecent)")
+                if symlink(mostRecent, path) == EXIT_SUCCESS {
                     continue
                 }
+                log("⚠️ Linking PCH failed " +
+                    String(cString: strerror(errno)))
             }
 
             log("Processing command: "+command+" -o \(objectFile)\n")
