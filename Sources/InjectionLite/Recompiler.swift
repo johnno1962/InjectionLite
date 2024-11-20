@@ -58,7 +58,8 @@ public struct Recompiler {
             if let (path, before, after): (String, String, String) = errors[
                 #"PCH file '(([^']+?-Bridging-Header-swift_)\w+(-clang_\w+.pch))' not found:"#] {
                 if let lerrors = Popen.system(
-                    "/bin/ln -s \(before)*\(after) \(path)", errors: true) {
+                    "/bin/ln -s `ls -rt \(before)*\(after) | /usr/bin/head -1` \(path)",
+                    errors: true) {
                     log("⚠️ Linking PCH failed "+lerrors)
                 } else {
                     continue
