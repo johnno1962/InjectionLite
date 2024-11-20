@@ -52,9 +52,19 @@ public struct Recompiler {
         log("Recompiling \(source)")
 
         Reloader.injectionNumber += 1
-        let objectFile = tmpbase+".o"
-        try? FileManager.default.removeItem(atPath: objectFile)
-        if let errors = Popen.system(command+" -o \(objectFile)", errors: true) {
+        let objectFile = tmpbase + ".o"
+        unlink(objectFile)
+        while let errors = Popen.system(command+" -o \(objectFile)", errors: true) {
+            if let (path, before, after): (String, String, String) = errors[
+                #"PCH file '(([^']+?-Bridging-Header-swift_)\w+(-clang_\w+.pch))' not found:"#] {
+                if let lerrors = Popen.system(
+                    "/bin/ln -s \(before)*\(after) \(path)", errors: true) {
+                    log("⚠️ Linking PCH failed "+lerrors)
+                } else {
+                    continue
+                }
+            }
+
             log("Processing command: "+command+" -o \(objectFile)\n")
             log("Current log: \(FileWatcher.derivedLog ?? "no log")")
             log("⚠️ Compiler output:\n"+errors)

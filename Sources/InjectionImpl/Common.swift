@@ -18,8 +18,8 @@ public class InjectionClient: NSObject {
     @objc class func connectTo(_ host: String) -> NSObject? {
         log("⚠️ App loading iOSInjection.bundle but also " +
             "using InjectionLite/InjectionNext Swift Package.")
-        /// Inhibit running of code in iOSInjection.bundle if loaded.
-        return InjectionBoth()
+        /// iOSInjection.bundle allowed to run standalone.
+        return nil //InjectionBoth()
     }
 
     public class InjectionBoth: NSObject {
