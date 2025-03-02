@@ -89,8 +89,8 @@ struct LogParser {
                                   with: " ", options: .regularExpression,
                                   range: NSMakeRange(0, command.length))
             // Strip out all per-primary-file options.
-            .replacingOccurrences(of:
-                #" (-(pch-output-dir|supplementary-output-file-map|emit-(reference-)?dependencies|serialize-diagnostics|index-(store|unit-output))-path|(-validate-clang-modules-once )?-clang-build-session-file|-Xcc -ivfsstatcache -Xcc) \#(Recompiler.argumentRegex)"#,
+            .replacingOccurrences(of: Recompiler.optionsToRemove +
+                                  " "+Recompiler.argumentRegex,
                                   with: "", options: .regularExpression)
             // save to one side primary source file we are injecting
             .replacingOccurrences(of: " -primary-file "+escaped,

@@ -112,6 +112,7 @@ public struct Recompiler {
     static let fileNameRegex = #"/(\#(argumentRegex))\.\w+"#
     static let parsePlatform = try! NSRegularExpression(pattern:
         #"-(?:isysroot|sdk)(?: |"\n")((\#(fileNameRegex)/Contents/Developer)/Platforms/(\w+)\.platform\#(fileNameRegex)\#\.sdk)"#)
+    static var optionsToRemove = #" (-(pch-output-dir|supplementary-output-file-map|emit-(reference-)?dependencies|serialize-diagnostics|index-(store|unit-output))(-path)?|(-validate-clang-modules-once )?-clang-build-session-file|-Xcc -ivfsstatcache -Xcc)"#
 
     #if arch(arm64)
     public var arch = "arm64"
