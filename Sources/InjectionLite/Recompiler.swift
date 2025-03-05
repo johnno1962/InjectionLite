@@ -24,6 +24,12 @@ import PopenD
 import Popen
 #endif
 
+extension String {
+    var unescape: String {
+        return self[#"\\(.)"#, "$1"]
+    }
+}
+
 public struct Recompiler {
 
     static var optionsToRemove = #"(-(pch-output-dir|supplementary-output-file-map|emit-(reference-)?dependencies|serialize-diagnostics|index-(store|unit-output))(-path)?|(-validate-clang-modules-once )?-clang-build-session-file|-Xcc -ivfsstatcache -Xcc)"#
@@ -40,8 +46,9 @@ public struct Recompiler {
 
     /// Recompile a source to produce a dynamic library that can be loaded
     mutating func recompile(source: String, dylink: Bool) -> String? {
-        guard let command = longTermCache[source] as? String ??
-                parser.command(for: source) else {
+        var scanned: (logDir: String, scanner: Popen?)?
+        guard var command = longTermCache[source] as? String ??
+                parser.command(for: source, found: &scanned) else {
             log("""
                 ⚠️ Could not locate command for \(source). \
                 Try editing a file and rebuilding your project. \
@@ -49,6 +56,29 @@ public struct Recompiler {
                 Compilation Mode.
                 """)
             return nil
+        }
+        
+        let filelistRegex = #" -filelist (\#(Recompiler.argumentRegex))"#
+        if let filelistPath = (command[filelistRegex] as String?)?.unescape,
+           !FileManager.default.fileExists(atPath: filelistPath) {
+            if scanned == nil,
+               let rescanned = parser.command(for: source, found: &scanned) {
+                command = rescanned
+            }
+            
+            var buildLog = "NOLOG"
+            while let log = scanned?.scanner?.readLine() {
+                buildLog = log
+            }
+            
+            if let logDir = scanned?.logDir {
+                do {
+                    try recoverFileList(for: source, from: logDir+"/"+buildLog,
+                                        command: &command, regex: filelistRegex)
+                } catch {
+                    log("recoverFileList: \(error)")
+                }
+            }
         }
 
         log("Recompiling \(source)")
@@ -108,6 +138,33 @@ public struct Recompiler {
     public mutating func writeToCache() {
         longTermCache.write(toFile: Reloader.cacheFile,
                             atomically: true)
+    }
+    
+    func recoverFileList(for source: String, from logFile: String,
+                         command: inout String, regex: String) throws {
+        let scanner = Popen(cmd: "/usr/bin/gunzip <'\(logFile)' | /usr/bin/tr '\\r' '\\n'")
+        let sourceName = URL(fileURLWithPath: source).lastPathComponent
+        while let line = scanner?.readLine() {
+            if let mapFile = (line[
+                #" -output-file-map (\#(Self.argumentRegex))"#] as String?)?.unescape {
+               let data = try Data(contentsOf: URL(fileURLWithPath: mapFile))
+                guard let map = try JSONSerialization.jsonObject(with: data)
+                        as? [String: Any] else { continue }
+                if map[source] == nil &&
+                    map.keys.filter({ $0.hasSuffix(sourceName) }).isEmpty {
+                    continue
+                }
+                let flielists = "/tmp/InjectionLite_filelists/"
+                try? FileManager.default.createDirectory(atPath: flielists,
+                                         withIntermediateDirectories: true)
+                let tmpFilelist = flielists+sourceName
+                try (map.keys.joined(separator: "\n")+"\n")
+                    .write(toFile: tmpFilelist, atomically: false, encoding: .utf8)
+                command[regex] = tmpFilelist[#"([\s\$])"#, #"\\\\$1"#]
+                log("ℹ️ Recovered \(tmpFilelist) from \(mapFile)[\(map.keys.count)]")
+                break
+            }
+        }
     }
 
     /// Regex for path argument, perhaps containg escaped spaces

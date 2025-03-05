@@ -24,7 +24,8 @@ import Popen
 struct LogParser {
 
     /// "grep" the most recent build log for the command to recompile a file
-    func command(for source: String) -> String? {
+    func command(for source: String,
+                 found: inout (logDir: String, scanner: Popen?)?) -> String? {
         guard let logsDir = FileWatcher.derivedLog.flatMap({
             URL(fileURLWithPath: $0)
                 .deletingLastPathComponent().path
@@ -54,6 +55,8 @@ struct LogParser {
             log("Scanner: "+scanner)
             return nil
         }
+        
+        found = (logsDir, scanning)
 
         return makeSinglePrimary(source: source, command) +
             (isSwift ? "" : " -Xclang -fno-validate-pch")
