@@ -34,12 +34,13 @@ struct LogParser {
             return nil
         }
         // Escape "difficult" characters for shell.
+        let isSwift = source.hasSuffix(".swift")
         let triplesc = #"\\\\\\$1"#, escaped = source
             .replacingOccurrences(of: #"([ '(){}])"#, with: triplesc,
                                   options: .regularExpression)
             .replacingOccurrences(of: #"([$*&])"#, with: #"\\\\"#+triplesc,
                                   options: .regularExpression)
-        let option = source.hasSuffix(".swift") ? "-primary-file" : "-c"
+        let option = isSwift ? "-primary-file" : "-c"
         let scanner = """
             cd "\(logsDir)" && for log in `/bin/ls -t *.xcactivitylog`; do \
                 if /usr/bin/gunzip <$log | /usr/bin/tr '\\r' '\\n' | \
@@ -54,7 +55,8 @@ struct LogParser {
             return nil
         }
 
-        return makeSinglePrimary(source: source, command)
+        return makeSinglePrimary(source: source, command) +
+            (isSwift ? "" : " -Xclang -fno-validate-pch")
     }
 
     /// re-process command to only compile a single file at a time.

@@ -26,6 +26,8 @@ import Popen
 
 public struct Recompiler {
 
+    static var optionsToRemove = #"(-(pch-output-dir|supplementary-output-file-map|emit-(reference-)?dependencies|serialize-diagnostics|index-(store|unit-output))(-path)?|(-validate-clang-modules-once )?-clang-build-session-file|-Xcc -ivfsstatcache -Xcc)"#
+
     /// A cache is kept of compiltaion commands in /tmp as Xcode housekeeps logs.
     lazy var longTermCache = NSMutableDictionary(contentsOfFile:
                     Reloader.cacheFile) ?? NSMutableDictionary()
@@ -71,6 +73,8 @@ public struct Recompiler {
             log("Current log: \(FileWatcher.derivedLog ?? "no log")")
             log("⚠️ Compiler output:\n"+errors)
             log("⚠️ Recompilation failed")
+            longTermCache[source] = nil
+            writeToCache()
             return nil
         }
 
@@ -112,7 +116,6 @@ public struct Recompiler {
     static let fileNameRegex = #"/(\#(argumentRegex))\.\w+"#
     static let parsePlatform = try! NSRegularExpression(pattern:
         #"-(?:isysroot|sdk)(?: |"\n")((\#(fileNameRegex)/Contents/Developer)/Platforms/(\w+)\.platform\#(fileNameRegex)\#\.sdk)"#)
-    static var optionsToRemove = #"(-(pch-output-dir|supplementary-output-file-map|emit-(reference-)?dependencies|serialize-diagnostics|index-(store|unit-output))(-path)?|(-validate-clang-modules-once )?-clang-build-session-file|-Xcc -ivfsstatcache -Xcc)"#
 
     #if arch(arm64)
     public var arch = "arm64"
