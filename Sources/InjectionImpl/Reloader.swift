@@ -87,10 +87,10 @@ public struct Reloader {
         Self.lastTime = now
         return true
     }
-    
+
     public typealias ClassInfo = (old: [AnyClass], new: [AnyClass],
                                   generics: Set<String>)
-    
+
     public mutating func loadAndPatch(in dylib: String) ->
         (image: ImageSymbols, classes: ClassInfo)? {
         bench("Start")
@@ -100,12 +100,12 @@ public struct Reloader {
             Self.loadErrors.removeAll()
             return nil
         }
-        
+
         let classes = patchClasses(in: image)
         if classes.new.count != 0 {
             log("Ignore messages about duplicate classes ⬆️")
         }
-        
+
         let rebound = interposeSymbols(in: image)
         if classes.new.count == 0 && rebound.count == 0 &&
             image.entries(withPrefix: "_OBJC_$_CATEGORY_").count == 0 {
@@ -372,7 +372,7 @@ public struct Reloader {
         dyload(dylib: platformDev +
                "usr/lib/libXCTestSwiftSupport.dylib")
         #endif
-        
+
         let inBundle = Bundle(for: InjectionClient.self)
         if let fwork = Bundle.main.privateFrameworksURL?
             .appendingPathComponent("StoreKitTest.framework/StoreKitTest").path,
@@ -380,7 +380,7 @@ public struct Reloader {
             log("ℹ️ Loading "+fwork)
             dyload(dylib: fwork)
         }
-        
+
         // Are there any .xctest bundles packaged with the app? If so, load them
         let plugins = Bundle.main.path(forResource: "PlugIns", ofType: nil)
                    ?? NSTemporaryDirectory()

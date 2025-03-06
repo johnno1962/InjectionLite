@@ -55,7 +55,7 @@ struct LogParser {
             log("Scanner: "+scanner)
             return nil
         }
-        
+
         found = (logsDir, scanning)
 
         return makeSinglePrimary(source: source, command) +

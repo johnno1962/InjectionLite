@@ -57,7 +57,7 @@ public struct Recompiler {
                 """)
             return nil
         }
-        
+
         let filelistRegex = #" -filelist (\#(Recompiler.argumentRegex))"#
         if let filelistPath = (command[filelistRegex] as String?)?.unescape,
            !FileManager.default.fileExists(atPath: filelistPath) {
@@ -65,12 +65,12 @@ public struct Recompiler {
                let rescanned = parser.command(for: source, found: &scanned) {
                 command = rescanned
             }
-            
+
             var buildLog = "NOLOG"
             while let log = scanned?.scanner?.readLine() {
                 buildLog = log
             }
-            
+
             if let logDir = scanned?.logDir {
                 do {
                     try recoverFileList(for: source, from: logDir+"/"+buildLog,
@@ -139,7 +139,7 @@ public struct Recompiler {
         longTermCache.write(toFile: Reloader.cacheFile,
                             atomically: true)
     }
-    
+
     func recoverFileList(for source: String, from logFile: String,
                          command: inout String, regex: String) throws {
         let scanner = Popen(cmd: "/usr/bin/gunzip <'\(logFile)' | /usr/bin/tr '\\r' '\\n'")

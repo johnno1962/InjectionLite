@@ -20,7 +20,7 @@ import Foundation
 open class InjectionBase: NSObject {
 
     public var watcher: FileWatcher?
-    
+
     /// Called from InjectionBoot.m, setup filewatch and wait...
     public override init() {
         super.init()
@@ -51,7 +51,7 @@ open class InjectionBase: NSObject {
 
         fileWatch(dirs: dirs)
     }
-    
+
     func fileWatch(dirs: [String]) {
         let isVapor = Reloader.injectionQueue != .main
         watcher = FileWatcher(roots: dirs, callback: { filesChanged in
