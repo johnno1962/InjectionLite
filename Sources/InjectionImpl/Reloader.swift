@@ -113,7 +113,15 @@ public struct Reloader {
                 " to your project's Debug configuration \"Other Linker Flags\"?")
         }
 
-        let symbols = Set(rebound.map { String(cString: $0) })
+        var symbols = [String: Int]()
+        for symbol in rebound {
+            symbols[String(cString: symbol), default: 0] += 1
+        }
+        for sym in symbols.keys.sorted() {
+            let count = symbols[sym] ?? 0, s = count == 1 ? "" : "s"
+            detail("Interposed \(count) time\(s) " + (sym.swiftDemangle ?? sym))
+        }
+
         log("Loaded and rebound \(symbols.count) symbols, classes \(classes.new)")
         return (image, classes)
     }
@@ -346,7 +354,7 @@ public struct Reloader {
             guard let value = entry.value, // Does symbol have a value
                   Self.injectableSymbol(entry.name) else { continue }
             let symbol = String(cString: entry.name)
-            detail("Interposing \(value) "+(entry.name.demangled ?? symbol))
+//            detail("Interposing \(value) "+(entry.name.demangled ?? symbol))
             names.append(entry.name)
             impls.append(value)
             Self.interposed[symbol] = value
