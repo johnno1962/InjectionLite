@@ -94,7 +94,7 @@ struct LogParser {
                                   with: " ", options: .regularExpression,
                                   range: NSMakeRange(0, command.length))
             // Strip out all per-primary-file options.
-            .replacingOccurrences(of: " "+Recompiler.optionsToRemove +
+            .replacingOccurrences(of: " "+Reloader.optionsToRemove +
                                   " "+Recompiler.argumentRegex,
                                   with: "", options: .regularExpression)
             // save to one side primary source file we are injecting

@@ -64,6 +64,8 @@ extension Reloader {
     public static var xcodeDev = "/Applications/Xcode.app/Contents/Developer"
     public static var platform = "iPhoneSimulator"
 
+    public static var optionsToRemove = #"(-(pch-output-dir|supplementary-output-file-map|emit-((reference-)?dependencies|const-values)|serialize-diagnostics|index-(store|unit-output))(-path)?|(-validate-clang-modules-once )?-clang-build-session-file|-Xcc -ivfsstatcache -Xcc)"#
+
     /// A way to determine if a file being injected is an XCTest
     public static func injectingXCTest(in dylib: String) -> Bool {
         if let object = NSData(contentsOfFile: dylib),

@@ -32,8 +32,6 @@ extension String {
 
 public struct Recompiler {
 
-    static var optionsToRemove = #"(-(pch-output-dir|supplementary-output-file-map|emit-(reference-)?dependencies|serialize-diagnostics|index-(store|unit-output))(-path)?|(-validate-clang-modules-once )?-clang-build-session-file|-Xcc -ivfsstatcache -Xcc)"#
-
     /// A cache is kept of compiltaion commands in /tmp as Xcode housekeeps logs.
     lazy var longTermCache = NSMutableDictionary(contentsOfFile:
                     Reloader.cacheFile) ?? NSMutableDictionary()
