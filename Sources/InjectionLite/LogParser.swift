@@ -52,7 +52,8 @@ struct LogParser {
 
         let scanning = Popen(cmd: scanner)
         guard let command = scanning?.readLine() else {
-            log("Scanner: "+scanner)
+            log("Log scanning failed: "+scanner)
+            log("With Xcode 16.3+, have you tried adding build setting EMIT_FRONTEND_COMMAND_LINES?")
             return nil
         }
 
@@ -110,6 +111,9 @@ struct LogParser {
             // Not required
             .replacingOccurrences(of:
                 "-frontend-parseable-output ", with: "")
+            // Strip junk with Xcode 16.3 and EMIT_FRONTEND_COMMAND_LINES
+            .replacingOccurrences(of: #"^\S*?"(?=/)"#,
+                                  with: "", options: .regularExpression)
     }
 
     /// determine the real letter casing of a path on the file system
