@@ -84,7 +84,12 @@ public struct Recompiler {
         Reloader.injectionNumber += 1
         let objectFile = tmpbase + ".o"
         unlink(objectFile)
-        while let errors = Popen.system(command+" -o \(objectFile)", errors: true) {
+        while let errors = Popen.system(command+" -o \(objectFile) " +
+                                       Reloader.typeCheckOption, errors: nil) {
+            for slow: String in errors[Reloader.typeCheckRegex] {
+                log(slow)
+            }
+
             if let (path, before, after): (String, String, String) = errors[
                 #"PCH file '(([^']+?-Bridging-Header-swift_)\w+(-clang_\w+.pch))' not found:"#],
                let mostRecent = Popen(
@@ -97,12 +102,17 @@ public struct Recompiler {
                     String(cString: strerror(errno)))
             }
 
+            if !errors.contains(" error: ") { break }
+            let wasCached = longTermCache[source] != nil
+            longTermCache[source] = nil
+            writeToCache()
+            if wasCached {
+                return recompile(source: source, dylink: dylink)
+            }
             log("Processing command: "+command+" -o \(objectFile)\n")
             log("Current log: \(FileWatcher.derivedLog ?? "no log")")
             log("⚠️ Compiler output:\n"+errors)
             log("⚠️ Recompilation failed")
-            longTermCache[source] = nil
-            writeToCache()
             return nil
         }
 

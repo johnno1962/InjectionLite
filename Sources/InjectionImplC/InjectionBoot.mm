@@ -41,6 +41,7 @@ extern void *DLKit_appImagesContain(const char *symbol);
                      (void *)injection_getKeyPath);
     // If InjectionLite class present, start it up.
     static NSObject *singleton;
+    if (objc_getClass("InjectionNext")) return;
     if (Class InjectionLite = objc_getClass("InjectionLite"))
         singleton = [[InjectionLite alloc] init];
 }

@@ -22,7 +22,7 @@ let package = Package(
         // Dependencies declare other packages that this package depends on.
         // Abstraction for performing shell command to grep logs and recompile.
         .package(url: "https://github.com/johnno1962/Popen",
-                 .upToNextMajor(from: "2.1.6")),
+                 .upToNextMajor(from: "2.1.7")),
         // An interface to in-memory symbol table of loaded images.
         .package(url: "https://github.com/johnno1962/DLKit",
                  .upToNextMajor(from: "3.4.7")),
