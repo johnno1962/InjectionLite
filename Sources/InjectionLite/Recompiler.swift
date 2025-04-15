@@ -79,7 +79,7 @@ public struct Recompiler {
             }
         }
 
-        log("Recompiling \(source)")
+        log("LiteRecompiling \(source)")
 
         Reloader.injectionNumber += 1
         let objectFile = tmpbase + ".o"
