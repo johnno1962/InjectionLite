@@ -65,7 +65,7 @@ extension Reloader {
     public static var platform = "iPhoneSimulator"
 
     public static var optionsToRemove = #"(-(pch-output-dir|supplementary-output-file-map|emit-((reference-)?dependencies|const-values)|serialize-diagnostics|index-(store|unit-output))(-path)?|(-validate-clang-modules-once )?-clang-build-session-file|-Xcc -ivfsstatcache -Xcc)"#,
-        typeCheckOption = "-warn-long-expression-type-checking=150",
+        typeCheckLimit = "-warn-long-expression-type-checking=150",
         typeCheckRegex = #"(?<=/)\w+\.swift:\d+:\d+: warning: expression took \d+ms to type-check.*"#
 
     /// A way to determine if a file being injected is an XCTest

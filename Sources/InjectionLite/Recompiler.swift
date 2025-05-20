@@ -84,8 +84,9 @@ public struct Recompiler {
         Reloader.injectionNumber += 1
         let objectFile = tmpbase + ".o"
         unlink(objectFile)
+        let benchmark = source.hasSuffix(".swift") ? Reloader.typeCheckLimit : ""
         while let errors = Popen.system(command+" -o \(objectFile) " +
-                                       Reloader.typeCheckOption, errors: nil) {
+                                        benchmark, errors: nil) {
             for slow: String in errors[Reloader.typeCheckRegex] {
                 log(slow)
             }
