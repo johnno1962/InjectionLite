@@ -21,8 +21,8 @@ public class FileWatcher: NSObject {
         pattern: "[^~]\\.(mm?|cpp|swift|storyboard|xib)$")
 
     static let logsPref = "HotReloadingBuildLogsDir"
-    static var derivedLog =
-        UserDefaults.standard.string(forKey: logsPref) {
+    static var defaultLog = UserDefaults.standard.string(forKey: logsPref)
+    static var derivedLog = defaultLog {
         didSet {
             UserDefaults.standard.set(derivedLog, forKey: logsPref)
         }
@@ -120,7 +120,13 @@ public class FileWatcher: NSObject {
             #if !INJECTION_III_APP
             if path.hasSuffix(".xcactivitylog") &&
                 path.contains("/Logs/Build/") {
-                Self.derivedLog = path
+                // New custom DerivedData takes precedence
+                if (!path.contains("/Xcode/DerivedData/") ||
+                    Self.derivedLog == Self.defaultLog ||
+                    Self.derivedLog?.contains("/Xcode/DerivedData/") != false) {
+//                    print("Setting derivedLog: "+path)
+                    Self.derivedLog = path
+                }
             }
             if eventId <= eventsStart { continue }
             #endif

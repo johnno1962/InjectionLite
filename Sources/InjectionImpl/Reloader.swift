@@ -120,9 +120,10 @@ public struct Reloader {
             for entry in loaded.entries(withSuffix: "N") {
                 let symbol = entry.symbol
                 if let value = entry.value, let oldSize = Self.typeSizes[symbol],
-                   oldSize != sizeof(anyType: value) {
+                   let newSize = true ? sizeof(anyType: value) : nil,
+                   oldSize != newSize && newSize != 0 {
                     let anyType = unsafeBitCast(value, to: Any.Type.self)
-                    log("⚠️ Size of type '\(_typeName(anyType))' changed from \(oldSize) to \(sizeof(anyType: value))")
+                    log("⚠️ Size of type '\(_typeName(anyType))' changed from \(oldSize) to \(newSize)")
                     Self.sizeChanged = true
                 }
             }
