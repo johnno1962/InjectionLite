@@ -54,14 +54,14 @@ public struct Reloader {
     /**
      Get the size in bytes of type storage or class structure
      */
-    func sizeof(anyType: UnsafeRawPointer) -> size_t {
+    func sizeof(anyType: UnsafeRawPointer) -> size_t? {
         if unsafeBitCast(anyType, to: Any.Type?.self) as? AnyClass != nil {
            return size_t(anyType.assumingMemoryBound(
             to: TargetClassMetadata.self).pointee.ClassSize)
         }
         let metaData = anyType.assumingMemoryBound(
             to: UnsafePointer<ValueWitnessTable>?.self)
-        return metaData[-1]?.pointee.size ?? 0
+        return metaData[-1]?.pointee.size
     }
 
     public init() {}
@@ -118,11 +118,11 @@ public struct Reloader {
             Self.sizeChanged = false
             
             for entry in loaded.entries(withSuffix: "N") {
-                let symbol = entry.symbol
-                if let value = entry.value, let oldSize = Self.typeSizes[symbol],
-                   oldSize != sizeof(anyType: value) {
+                if let value = entry.value,
+                   let newSize = sizeof(anyType: value), newSize != 0,
+                   let oldSize = Self.typeSizes[entry.symbol], oldSize != newSize {
                     let anyType = unsafeBitCast(value, to: Any.Type.self)
-                    log("⚠️ Size of type '\(_typeName(anyType))' changed from \(oldSize) to \(sizeof(anyType: value))")
+                    log("⚠️ Size of type '\(_typeName(anyType))' changed from \(oldSize) to \(newSize)")
                     Self.sizeChanged = true
                 }
             }

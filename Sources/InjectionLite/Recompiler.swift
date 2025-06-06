@@ -43,10 +43,13 @@ public struct Recompiler {
     }
 
     /// Recompile a source to produce a dynamic library that can be loaded
-    mutating func recompile(source: String, dylink: Bool) -> String? {
+    mutating func recompile(source: String, platformFilter: String = "",
+                            dylink: Bool) -> String? {
         var scanned: (logDir: String, scanner: Popen?)?
-        guard var command = longTermCache[source] as? String ??
-                parser.command(for: source, found: &scanned) else {
+        let cacheKey = source+platformFilter
+        guard var command = longTermCache[cacheKey] as? String ??
+                parser.command(for: source, platformFilter:
+                                platformFilter, found: &scanned) else {
             log("""
                 ⚠️ Could not locate command for \(source). \
                 Try editing a file and rebuilding your project. \
@@ -79,7 +82,7 @@ public struct Recompiler {
             }
         }
 
-        log("LiteRecompiling \(source)")
+        log("Recompiling \(source) \(platformFilter)")
 
         Reloader.injectionNumber += 1
         let objectFile = tmpbase + ".o"
@@ -104,8 +107,8 @@ public struct Recompiler {
             }
 
             if !errors.contains(" error: ") { break }
-            let wasCached = longTermCache[source] != nil
-            longTermCache[source] = nil
+            let wasCached = longTermCache[cacheKey] != nil
+            longTermCache[cacheKey] = nil
             writeToCache()
             if wasCached {
                 return recompile(source: source, dylink: dylink)
@@ -117,8 +120,8 @@ public struct Recompiler {
             return nil
         }
 
-        if longTermCache[source] as? String != command {
-            longTermCache[source] = command
+        if longTermCache[cacheKey] as? String != command {
+            longTermCache[cacheKey] = command
             writeToCache()
         }
         if !dylink {
