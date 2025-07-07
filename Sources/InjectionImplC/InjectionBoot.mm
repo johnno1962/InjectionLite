@@ -17,7 +17,7 @@ extern "C" {
 extern void hookKeyPaths(void *original, void *replacement);
 extern const void *swift_getKeyPath(void *, const void *);
 extern const void *injection_getKeyPath(void *, const void *);
-extern void *DLKit_appImagesContain(const char *symbol);
+extern const void *DLKit_appImagesContain(const char *symbol);
 }
 
 @implementation NSObject(InjectionBoot)
