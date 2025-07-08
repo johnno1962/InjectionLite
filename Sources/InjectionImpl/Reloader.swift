@@ -198,6 +198,7 @@ public struct Reloader {
         for entry in image.swiftSymbols(withSuffixes: ["CMa"]) {
             if let genericClassName = entry.name.demangled?
                     .components(separatedBy: " ").last,
+               !genericClassName.hasSuffix(")"),
                !genericClassName.hasPrefix("__C.") {
                 injectedGenerics.insert(genericClassName)
             }
