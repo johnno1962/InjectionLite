@@ -46,7 +46,7 @@ struct LogParser {
             cd "\(logsDir)" && for log in `/bin/ls -t *.xcactivitylog`; do \
                 if /usr/bin/gunzip <$log | /usr/bin/tr '\\r' '\\n' | \
                     /usr/bin/grep -v builtin-ScanDependencies | \
-                    /usr/bin/grep " \(option) \(escaped) " \(
+                    /usr/bin/grep " \(option) \(escaped) " \(isSwift &&
                     platformFilter != "" ? "| /usr/bin/grep \(platformFilter)" : ""); \
                 then echo $log && exit; fi; done
             """
