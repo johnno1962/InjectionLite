@@ -111,7 +111,8 @@ public struct Recompiler {
             longTermCache[cacheKey] = nil
             writeToCache()
             if wasCached {
-                return recompile(source: source, dylink: dylink)
+                return recompile(source: source, platformFilter: platformFilter,
+                                 dylink: dylink)
             }
             log("Processing command: "+command+" -o \(objectFile)\n")
             log("Current log: \(FileWatcher.derivedLog ?? "no log")")

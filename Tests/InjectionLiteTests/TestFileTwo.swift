@@ -12,3 +12,9 @@ class TestSubClass: GenericSuper<Int> {
         return "VALUE234720"
     }
 }
+
+private class PrivateClass {
+    @objc func injected() {}
+}
+
+class Foo<T> {}

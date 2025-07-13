@@ -435,14 +435,23 @@ public struct Reloader {
     }
 
     lazy var loadXCTest: Bool = {
+        let savelog = DLKit.logger
+        defer { DLKit.logger = savelog }
+        DLKit.logger = { (_ msg: String) in
+            Self.loadErrors.append(msg)
+        }
         #if targetEnvironment(simulator) && SWIFT_PACKAGE || os(macOS)
         let platformDev = Self.xcodeDev +
             "/Platforms/\(Self.platform).platform/Developer/"
 
-        dyload(dylib: platformDev +
-               "Library/Frameworks/XCTest.framework/XCTest")
-        dyload(dylib: platformDev +
-               "usr/lib/libXCTestSwiftSupport.dylib")
+        for (priv, framework) in [
+            ("Private", "XCTestSupport"), ("Private", "XCTestCore"),
+            ("", "XCUIAutomation"), ("", "XCTest"), ("", "Testing")] {
+            _ = DLKit.load(dylib: platformDev +
+                           "Library/\(priv)Frameworks/\(framework).framework/\(framework)")
+        }
+        _ = DLKit.load(dylib: platformDev +
+                       "usr/lib/libXCTestSwiftSupport.dylib")
         #endif
 
         let inBundle = Bundle(for: InjectionClient.self)
@@ -450,7 +459,7 @@ public struct Reloader {
             .appendingPathComponent("StoreKitTest.framework/StoreKitTest").path,
            FileManager.default.fileExists(atPath: fwork) {
             log("ℹ️ Loading "+fwork)
-            dyload(dylib: fwork)
+            _ = DLKit.load(dylib: fwork)
         }
 
         // Are there any .xctest bundles packaged with the app? If so, load them
@@ -463,7 +472,7 @@ public struct Reloader {
                     .replacingOccurrences(of: ".xctest", with: "")
                 if name != xctest {
                     log("ℹ️ Loading app plugin "+xctest+"/"+name)
-                    dyload(dylib: plugins+"/"+xctest+"/"+name)
+                    _ = DLKit.load(dylib: plugins+"/"+xctest+"/"+name)
                 }
             }
         }
