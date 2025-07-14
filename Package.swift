@@ -25,7 +25,7 @@ let package = Package(
                  .upToNextMajor(from: "2.1.8")),
         // An interface to in-memory symbol table of loaded images.
         .package(url: "https://github.com/johnno1962/DLKit",
-                 .upToNextMajor(from: "3.4.8")),
+                 .upToNextMajor(from: "3.4.11")),
         // No-fuss regular expressions for conditioning Strings.
         .package(url: "https://github.com/johnno1962/SwiftRegex5",
                  .upToNextMajor(from: "6.1.3")),
