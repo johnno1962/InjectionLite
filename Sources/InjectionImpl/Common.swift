@@ -32,7 +32,7 @@ public func autoBitCast<IN,OUT>(_ x: IN) -> OUT {
 }
 @discardableResult /// Can be used in if statements
 public func detail(_ str: @autoclosure () -> String) -> Bool {
-    if getenv("INJECTION_DETAIL") != nil {
+    if getenv(INJECTION_DETAIL) != nil {
         log(str())
     }
     return true

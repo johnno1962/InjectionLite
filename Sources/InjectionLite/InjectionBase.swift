@@ -38,7 +38,7 @@ open class InjectionBase: NSObject {
                                   with: "$1", options: .regularExpression)
         var dirs = [home]
         let library = home+"/Library"
-        if let extra = getenv("INJECTION_DIRECTORIES") {
+        if let extra = getenv(INJECTION_DIRECTORIES) {
             dirs = String(cString: extra).components(separatedBy: ",")
                 .map { $0.replacingOccurrences(of: #"^~"#,
                    with: home, options: .regularExpression) } // expand ~ in paths

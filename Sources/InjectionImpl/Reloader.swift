@@ -144,7 +144,7 @@ public struct Reloader {
     @discardableResult
     func bench(_ what: String, since: TimeInterval = Self.lastTime) -> Bool {
         let now = Date.timeIntervalSinceReferenceDate
-        if getenv("INJECTION_BENCH") != nil {
+        if getenv(INJECTION_BENCH) != nil {
             print(String(format: "⏳%.3fms", (now-since)*1000)+" \(what)")
         }
         Self.lastTime = now

@@ -101,7 +101,8 @@ public struct Sweeper {
         }
 
         // implement -injected() method using sweep of objects in application
-        if !injectedClasses.isEmpty || !injectedGenerics.isEmpty {
+        if !injectedClasses.isEmpty || !injectedGenerics.isEmpty &&
+            getenv(INJECTION_OF_GENERICS) != nil {
             log("Starting sweep \(injectedClasses), \(injectedGenerics)...")
             var patched = Set<UnsafeRawPointer>()
             SwiftSweeper(instanceTask: {
@@ -194,9 +195,9 @@ class SwiftSweeper {
 
     let instanceTask: (AnyObject) -> Void
     var seen = [UnsafeRawPointer: Bool]()
-    let debugSweep = getenv("INJECTION_SWEEP_DETAIL") != nil
+    let debugSweep = getenv(INJECTION_SWEEP_DETAIL) != nil
     let sweepExclusions = { () -> NSRegularExpression? in
-        if let exclusions = getenv("INJECTION_SWEEP_EXCLUDE") {
+        if let exclusions = getenv(INJECTION_SWEEP_EXCLUDE) {
             let pattern = String(cString: exclusions)
             do {
                 let filter = try NSRegularExpression(pattern: pattern, options: [])

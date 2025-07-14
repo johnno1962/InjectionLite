@@ -8,6 +8,17 @@
 #define APP_NAME "InjectionLite"
 #define APP_PREFIX "🔥 "
 #define VAPOR_SYMBOL "$s10RoutingKit10ParametersVN"
+#define TCA_SYMBOL "_$s22ComposableArchitecture6LoggerCN"
+
+// Environment variables that can be used in schemes.
+#define INJECTION_DIRECTORIES "INJECTION_DIRECTORIES"
+#define INJECTION_SWEEP_DETAIL "INJECTION_SWEEP_DETAIL"
+#define INJECTION_SWEEP_EXCLUDE "INJECTION_SWEEP_EXCLUDE"
+#define INJECTION_OF_GENERICS "INJECTION_OF_GENERICS"
+#define INJECTION_NOKEYPATHS "INJECTION_NOKEYPATHS"
+#define INJECTION_KEYPATHS "INJECTION_KEYPATHS"
+#define INJECTION_DETAIL "INJECTION_DETAIL"
+#define INJECTION_BENCH "INJECTION_BENCH"
 
 @interface NSObject(InjectionBoot)
 + (BOOL)InjectionBoot_inPreview;

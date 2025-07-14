@@ -35,8 +35,8 @@ extern const void *DLKit_appImagesContain(const char *symbol);
     if ([self InjectionBoot_inPreview])
         return;
     // Hook Swift runtime's swift_getKeyPath to support pointfree.co's TCA
-    if (!getenv("INJECTION_NOKEYPATHS") && (getenv("INJECTION_KEYPATHS") ||
-        DLKit_appImagesContain("_$s22ComposableArchitecture6LoggerCN")))
+    if (!getenv(INJECTION_NOKEYPATHS) &&
+        (getenv(INJECTION_KEYPATHS) || DLKit_appImagesContain(TCA_SYMBOL)))
         hookKeyPaths((void *)swift_getKeyPath,
                      (void *)injection_getKeyPath);
     // If InjectionLite class present, start it up.
