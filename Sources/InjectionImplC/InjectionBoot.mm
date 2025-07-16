@@ -11,12 +11,14 @@
 #import "InjectionImplC.h"
 #import <XCTest/XCTest.h>
 #import <objc/runtime.h>
-#import <dlfcn.h>
 
 extern "C" {
 extern void hookKeyPaths(void *original, void *replacement);
 extern const void *swift_getKeyPath(void *, const void *);
 extern const void *injection_getKeyPath(void *, const void *);
+extern void injection_hookGenerics(void *original, void *replacement);
+extern Class swift_allocateGenericClassMetadata(void *, void *, void *);
+extern Class injection_allocateGenericClassMetadata(void *, void *, void *);
 extern const void *DLKit_appImagesContain(const char *symbol);
 }
 
@@ -39,6 +41,9 @@ extern const void *DLKit_appImagesContain(const char *symbol);
         (getenv(INJECTION_KEYPATHS) || DLKit_appImagesContain(TCA_SYMBOL)))
         hookKeyPaths((void *)swift_getKeyPath,
                      (void *)injection_getKeyPath);
+    if (!getenv(INJECTION_NOGENERICS))
+        injection_hookGenerics((void *)swift_allocateGenericClassMetadata,
+                               (void *)injection_allocateGenericClassMetadata);
     // If InjectionLite class present, start it up.
     static NSObject *singleton;
     if (objc_getClass("InjectionNext")) return;
