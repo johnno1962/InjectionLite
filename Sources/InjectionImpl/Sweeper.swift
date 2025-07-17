@@ -29,8 +29,8 @@ public struct Sweeper {
     public func sweepAndRunTests(image: ImageSymbols,
                                  classes: Reloader.ClassInfo) {
         DispatchQueue.main.async {
-            performSweep(oldClasses: classes.old, classes.generics, image: image)
-            hookedPatch(of: classes.generics, in: image)
+            let oldClasses = classes.old + hookedPatch(of: classes.generics, in: image)
+            performSweep(oldClasses: oldClasses, classes.generics, image: image)
 
             NotificationCenter.default.post(name: notification, object: classes.new)
 

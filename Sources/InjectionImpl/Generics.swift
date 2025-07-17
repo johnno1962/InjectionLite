@@ -30,9 +30,14 @@ public func hookGenerics(original: UnsafeMutableRawPointer,
                          replacer: UnsafeMutableRawPointer) {
     TrackingGenerics.save_allocateGeneric = autoBitCast(original)
     var genericAllocRebinding = [rebinding(name: strdup(TrackingGenerics.allocFuncName),
-                                      replacement: replacer, replaced: nil)]
+                                           replacement: replacer, replaced: nil)]
+    #if canImport(Nimble) || SWIFT_PACKAGE
     Reloader.interposed[TrackingGenerics.allocFuncName] = replacer
     _ = DLKit.appImages.rebind(rebindings: &genericAllocRebinding)
+    #else
+    SwiftTrace.initialRebindings += genericAllocRebinding
+    _ = SwiftTrace.apply(rebindings: &genericAllocRebinding)
+    #endif
 }
 
 @_cdecl("injection_allocateGenericClassMetadata")
@@ -47,8 +52,9 @@ public func injection_allocateGeneric(description: UnsafeMutableRawPointer,
     return newClass
 }
 
+#if canImport(Nimble) || SWIFT_PACKAGE // InjectionNext
 extension Sweeper {
-    func hookedPatch(of generics: Set<String>, in image: ImageSymbols) {
+    func hookedPatch(of generics: Set<String>, in image: ImageSymbols) -> [AnyClass] {
         var patched = Set<UnsafeRawPointer>()
         for baseName in generics {
             for special in TrackingGenerics.registry[baseName] ?? [] {
@@ -56,7 +62,29 @@ extension Sweeper {
                                   injectedGenerics: generics, patched: &patched)
             }
         }
-        detail("\(patched.count) generics patched")
+        let patchedClasses = patched.map { unsafeBitCast($0, to: AnyClass.self) }
+        if !patched.isEmpty {
+            detail("Patched \(patchedClasses)")
+        }
+        return patchedClasses
     }
 }
+#else // backport for InjectionIII
+extension SwiftInjection {
+    static func hookedPatch(of generics: Set<String>, tmpfile: String) -> [AnyClass] {
+        var patched = Set<UnsafeRawPointer>()
+        for baseName in generics {
+            for special in TrackingGenerics.registry[baseName] ?? [] {
+                _ = patchGenerics(oldClass: special, tmpfile: tmpfile,
+                                  injectedGenerics: generics, patched: &patched)
+            }
+        }
+        let patchedClasses = patched.map { unsafeBitCast($0, to: AnyClass.self) }
+        if !patched.isEmpty {
+            detail("Patched \(patchedClasses)")
+        }
+        return patchedClasses
+    }
+}
+#endif
 #endif
