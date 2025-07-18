@@ -29,8 +29,9 @@ public struct Sweeper {
     public func sweepAndRunTests(image: ImageSymbols,
                                  classes: Reloader.ClassInfo) {
         DispatchQueue.main.async {
-            let oldClasses = classes.old + hookedPatch(of: classes.generics, in: image)
-            performSweep(oldClasses: oldClasses, classes.generics, image: image)
+            let toSweep = classes.old + hookedPatch(of: classes.generics, in: image)
+            let oldWay = getenv(INJECTION_OF_GENERICS) != nil && toSweep.count == classes.old.count
+            performSweep(oldClasses: toSweep, oldWay ? classes.generics : [], image: image)
 
             NotificationCenter.default.post(name: notification, object: classes.new)
 
@@ -103,18 +104,17 @@ public struct Sweeper {
         }
 
         // implement -injected() method using sweep of objects in application
-        if !injectedClasses.isEmpty /*|| !injectedGenerics.isEmpty &&
-            getenv(INJECTION_OF_GENERICS) != nil*/ {
+        if !injectedClasses.isEmpty || !injectedGenerics.isEmpty {
             log("Starting sweep \(injectedClasses), \(injectedGenerics)...")
-//            var patched = Set<UnsafeRawPointer>()
+            var patched = Set<UnsafeRawPointer>()
             SwiftSweeper(instanceTask: {
                 (instance: AnyObject) in
                 if let instanceClass = object_getClass(instance),
                    injectedClasses.contains(where: {
-                       $0 == instanceClass || $0 === instanceClass }) /*||
+                       $0 == instanceClass || $0 === instanceClass }) ||
                     !injectedGenerics.isEmpty &&
                     self.patchGenerics(oldClass: instanceClass, image: image,
-                        injectedGenerics: injectedGenerics, patched: &patched)*/ {
+                        injectedGenerics: injectedGenerics, patched: &patched) {
                     let proto = unsafeBitCast(instance, to: SwiftInjected.self)
 //                    if SwiftEval.sharedInstance().vaccineEnabled {
 //                        performVaccineInjection(instance)

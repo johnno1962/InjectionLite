@@ -64,7 +64,7 @@ extension Sweeper {
         }
         let patchedClasses = patched.map { unsafeBitCast($0, to: AnyClass.self) }
         if !patched.isEmpty {
-            detail("Patched \(patchedClasses)")
+            detail("Patched generics \(patchedClasses)")
         }
         return patchedClasses
     }
@@ -81,7 +81,7 @@ extension SwiftInjection {
         }
         let patchedClasses = patched.map { unsafeBitCast($0, to: AnyClass.self) }
         if !patched.isEmpty {
-            detail("Patched \(patchedClasses)")
+            detail("Patched generics \(patchedClasses)")
         }
         return patchedClasses
     }
