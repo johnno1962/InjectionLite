@@ -2,18 +2,29 @@
 //  GitIgnoreParser.swift
 //  InjectionLite
 //
-//  Gitignore parser using swift-filename-matcher with UnfairLock caching
+//  Gitignore parser using swift-filename-matcher with NSCache for thread-safe caching
 //
 
 import Foundation
 import FilenameMatcher
-import os.lock
+
+/// Wrapper class for FilenameMatcher to use with NSCache
+private final class MatcherWrapper {
+    let matcher: FilenameMatcher
+    
+    init(matcher: FilenameMatcher) {
+        self.matcher = matcher
+    }
+}
 
 /// Parses .gitignore files and provides pattern matching functionality
 final class GitIgnoreParser {
     private var patterns: [GitIgnorePattern] = []
-    private static var matcherCache: [String: FilenameMatcher] = [:]
-    private static var cacheLock = os_unfair_lock()
+    private static let matcherCache: NSCache<NSString, MatcherWrapper> = {
+        let cache = NSCache<NSString, MatcherWrapper>()
+        cache.countLimit = 10_000  // Reasonable limit for pattern matchers
+        return cache
+    }()
     
     struct GitIgnorePattern {
         let pattern: String
@@ -41,13 +52,11 @@ final class GitIgnoreParser {
         }
         
         private static func getMatcher(for pattern: String) -> FilenameMatcher? {
-            let cacheKey = pattern
+            let cacheKey = pattern as NSString
             
-            os_unfair_lock_lock(&cacheLock)
-            defer { os_unfair_lock_unlock(&cacheLock) }
-            
-            if let cached = matcherCache[cacheKey] {
-                return cached
+            // Check cache first
+            if let cached = matcherCache.object(forKey: cacheKey) {
+                return cached.matcher
             }
             
             var matcherPattern = pattern
@@ -59,16 +68,9 @@ final class GitIgnoreParser {
             
             // Create FilenameMatcher with globstar support
             let matcher = FilenameMatcher(pattern: matcherPattern, options: [.globstar])
-            matcherCache[cacheKey] = matcher
             
-            // Prevent cache from growing too large
-            if matcherCache.count > 5_000_000 {
-                // Remove half the entries (simple cleanup)
-                let keysToRemove = Array(matcherCache.keys.prefix(matcherCache.count / 2))
-                for key in keysToRemove {
-                    matcherCache.removeValue(forKey: key)
-                }
-            }
+            // Store in cache - NSCache handles memory management automatically
+            matcherCache.setObject(MatcherWrapper(matcher: matcher), forKey: cacheKey)
             
             return matcher
         }
@@ -158,8 +160,6 @@ final class GitIgnoreParser {
     
     /// Clear the matcher cache (useful for memory management)
     static func clearCache() {
-        os_unfair_lock_lock(&cacheLock)
-        defer { os_unfair_lock_unlock(&cacheLock) }
-        matcherCache.removeAll()
+        matcherCache.removeAllObjects()
     }
 }

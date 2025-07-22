@@ -16,14 +16,16 @@ import InjectionImplC
 import InjectionImpl
 #endif
 import Foundation
-import os.lock
 
 open class InjectionBase: NSObject {
 
     public var watcher: FileWatcher?
     private var gitIgnoreParsers: [GitIgnoreParser] = []
-    private var ignoreCache: [String: Bool] = [:]
-    private var cacheLock = os_unfair_lock()
+    private let ignoreCache: NSCache<NSString, NSNumber> = {
+        let cache = NSCache<NSString, NSNumber>()
+        cache.countLimit = 50_000  // Cache for many file paths
+        return cache
+    }()
 
     /// Called from InjectionBoot.m, setup filewatch and wait...
     public override init() {
@@ -88,8 +90,8 @@ open class InjectionBase: NSObject {
         }
         
         // Use cached result if available
-        if let cachedResult = getCachedIgnoreResult(for: filePath) {
-            return !cachedResult
+        if let cachedResult = ignoreCache.object(forKey: filePath as NSString) {
+            return !cachedResult.boolValue
         }
         
         // Check if file should be ignored according to gitignore rules
@@ -103,8 +105,8 @@ open class InjectionBase: NSObject {
             }
         }
         
-        // Cache the result
-        cacheIgnoreResult(for: filePath, shouldIgnore: shouldIgnore)
+        // Cache the result - NSCache handles memory management automatically
+        ignoreCache.setObject(NSNumber(value: shouldIgnore), forKey: filePath as NSString)
         
         return !shouldIgnore
     }
@@ -115,25 +117,5 @@ open class InjectionBase: NSObject {
         return validExtensions.contains(fileExtension)
     }
     
-    private func getCachedIgnoreResult(for path: String) -> Bool? {
-        os_unfair_lock_lock(&cacheLock)
-        defer { os_unfair_lock_unlock(&cacheLock) }
-        return ignoreCache[path]
-    }
-    
-    private func cacheIgnoreResult(for path: String, shouldIgnore: Bool) {
-        os_unfair_lock_lock(&cacheLock)
-        defer { os_unfair_lock_unlock(&cacheLock) }
-        
-        ignoreCache[path] = shouldIgnore
-        
-        // Prevent cache from growing too large
-        if ignoreCache.count > 10000 {
-            let keysToRemove = Array(ignoreCache.keys.prefix(ignoreCache.count / 2))
-            for key in keysToRemove {
-                ignoreCache.removeValue(forKey: key)
-            }
-        }
-    }
 }
 #endif
