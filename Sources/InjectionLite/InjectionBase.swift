@@ -16,10 +16,14 @@ import InjectionImplC
 import InjectionImpl
 #endif
 import Foundation
+import os.lock
 
 open class InjectionBase: NSObject {
 
     public var watcher: FileWatcher?
+    private var gitIgnoreParsers: [GitIgnoreParser] = []
+    private var ignoreCache: [String: Bool] = [:]
+    private var cacheLock = os_unfair_lock()
 
     /// Called from InjectionBoot.m, setup filewatch and wait...
     public override init() {
@@ -53,10 +57,18 @@ open class InjectionBase: NSObject {
     }
 
     func fileWatch(dirs: [String]) {
+        // Load gitignore files for watched directories
+        for dir in dirs {
+            let parsers = GitIgnoreParser.findGitIgnoreFiles(startingFrom: dir)
+            gitIgnoreParsers.append(contentsOf: parsers)
+        }
+        
         let isVapor = Reloader.injectionQueue != .main
         watcher = FileWatcher(roots: dirs, callback: { filesChanged in
             for file in filesChanged {
-                self.inject(source: file)
+                if self.shouldProcessFile(file) {
+                    self.inject(source: file)
+                }
             }
         }, runLoop: isVapor ? CFRunLoopGetCurrent() : nil)
         log(APP_NAME+": Watching for source changes under \(dirs)/...")
@@ -67,6 +79,57 @@ open class InjectionBase: NSObject {
 
     func inject(source: String) {
         fatalError("Subclass responsibilty: "+#function)
+    }
+    
+    private func shouldProcessFile(_ filePath: String) -> Bool {
+        // Use cached result if available
+        if let cachedResult = getCachedIgnoreResult(for: filePath) {
+            return !cachedResult
+        }
+        
+        // Check if file should be ignored according to gitignore rules
+        let isDirectory = FileManager.default.fileExists(atPath: filePath, isDirectory: nil)
+        var shouldIgnore = false
+        
+        for parser in gitIgnoreParsers {
+            if parser.shouldIgnore(path: filePath, isDirectory: isDirectory) {
+                shouldIgnore = true
+                break
+            }
+        }
+        
+        // Cache the result
+        cacheIgnoreResult(for: filePath, shouldIgnore: shouldIgnore)
+        
+        // Only process relevant source files that aren't ignored
+        return !shouldIgnore && isValidSourceFile(filePath)
+    }
+    
+    private func isValidSourceFile(_ filePath: String) -> Bool {
+        let validExtensions = Set([".swift", ".m", ".mm", ".h", ".c", ".cpp", ".cc"])
+        let fileExtension = "." + (filePath as NSString).pathExtension.lowercased()
+        return validExtensions.contains(fileExtension)
+    }
+    
+    private func getCachedIgnoreResult(for path: String) -> Bool? {
+        os_unfair_lock_lock(&cacheLock)
+        defer { os_unfair_lock_unlock(&cacheLock) }
+        return ignoreCache[path]
+    }
+    
+    private func cacheIgnoreResult(for path: String, shouldIgnore: Bool) {
+        os_unfair_lock_lock(&cacheLock)
+        defer { os_unfair_lock_unlock(&cacheLock) }
+        
+        ignoreCache[path] = shouldIgnore
+        
+        // Prevent cache from growing too large
+        if ignoreCache.count > 10000 {
+            let keysToRemove = Array(ignoreCache.keys.prefix(ignoreCache.count / 2))
+            for key in keysToRemove {
+                ignoreCache.removeValue(forKey: key)
+            }
+        }
     }
 }
 #endif

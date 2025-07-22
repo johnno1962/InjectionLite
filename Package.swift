@@ -29,6 +29,8 @@ let package = Package(
         // No-fuss regular expressions for conditioning Strings.
         .package(url: "https://github.com/johnno1962/SwiftRegex5",
                  .upToNextMajor(from: "6.1.3")),
+        // Swift filename matcher for gitignore pattern matching.
+        .package(url: "https://github.com/ileitch/swift-filename-matcher.git", from: "2.0.1"),
     ],
     targets: [
         // Targets are the basic building blocks of a package. A target can define a module or a test suite.
@@ -38,7 +40,9 @@ let package = Package(
             name: "InjectionLite",
             dependencies: ["InjectionImpl",
                 // DEBUG_ONLY version of abstraction for popen().
-                .product(name: "PopenD", package: "Popen")]),
+                .product(name: "PopenD", package: "Popen"),
+                // Swift filename matcher for gitignore pattern matching.
+                .product(name: "FilenameMatcher", package: "swift-filename-matcher")]),
         // Implementation of "Swizzling for Swift" using interposing et all.
         .target(
             name: "InjectionImpl",
@@ -51,7 +55,8 @@ let package = Package(
         // Yes, there are tests.
         .testTarget(
             name: "InjectionLiteTests",
-            dependencies: ["InjectionLite"],
+            dependencies: ["InjectionLite",
+                .product(name: "FilenameMatcher", package: "swift-filename-matcher")],
             linkerSettings: [.unsafeFlags([
                 "-Xlinker", "-interposable"])])]
 )
