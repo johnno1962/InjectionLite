@@ -82,6 +82,11 @@ open class InjectionBase: NSObject {
     }
     
     private func shouldProcessFile(_ filePath: String) -> Bool {
+        // Early exit: Only process relevant source files
+        guard isValidSourceFile(filePath) else {
+            return false
+        }
+        
         // Use cached result if available
         if let cachedResult = getCachedIgnoreResult(for: filePath) {
             return !cachedResult
@@ -101,8 +106,7 @@ open class InjectionBase: NSObject {
         // Cache the result
         cacheIgnoreResult(for: filePath, shouldIgnore: shouldIgnore)
         
-        // Only process relevant source files that aren't ignored
-        return !shouldIgnore && isValidSourceFile(filePath)
+        return !shouldIgnore
     }
     
     private func isValidSourceFile(_ filePath: String) -> Bool {
