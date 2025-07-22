@@ -62,7 +62,7 @@ final class GitIgnoreParser {
             matcherCache[cacheKey] = matcher
             
             // Prevent cache from growing too large
-            if matcherCache.count > 1000 {
+            if matcherCache.count > 5_000_000 {
                 // Remove half the entries (simple cleanup)
                 let keysToRemove = Array(matcherCache.keys.prefix(matcherCache.count / 2))
                 for key in keysToRemove {
