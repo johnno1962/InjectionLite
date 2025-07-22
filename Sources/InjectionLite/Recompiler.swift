@@ -30,21 +30,31 @@ extension String {
     }
 }
 
+public protocol LiteParser {
+  func command(for source: String, platformFilter: String,
+               found: inout (logDir: String, scanner: Popen?)?) -> String?
+}
+
 public struct Recompiler {
 
     /// A cache is kept of compiltaion commands in /tmp as Xcode housekeeps logs.
     lazy var longTermCache = NSMutableDictionary(contentsOfFile:
                     Reloader.cacheFile) ?? NSMutableDictionary()
 
-    let parser = LogParser()
     let tmpdir = NSTemporaryDirectory()
     var tmpbase: String {
         return tmpdir+"eval\(Reloader.injectionNumber)"
+    }
+  
+    func parser(forProjectContaining source: String) -> LiteParser {
+        // AQuery support?
+        return LogParser()
     }
 
     /// Recompile a source to produce a dynamic library that can be loaded
     mutating func recompile(source: String, platformFilter: String = "",
                             dylink: Bool) -> String? {
+        let parser = parser(forProjectContaining: source)
         var scanned: (logDir: String, scanner: Popen?)?
         let cacheKey = source+platformFilter
         guard var command = longTermCache[cacheKey] as? String ??
@@ -63,7 +73,8 @@ public struct Recompiler {
         if let filelistPath = (command[filelistRegex] as String?)?.unescape,
            !FileManager.default.fileExists(atPath: filelistPath) {
             if scanned == nil,
-               let rescanned = parser.command(for: source, found: &scanned) {
+               let rescanned = parser.command(for: source, platformFilter:
+                                              platformFilter, found: &scanned) {
                 command = rescanned
             }
 
@@ -111,8 +122,8 @@ public struct Recompiler {
             longTermCache[cacheKey] = nil
             writeToCache()
             if wasCached {
-                return recompile(source: source, platformFilter: platformFilter,
-                                 dylink: dylink)
+                return recompile(source: source, platformFilter:
+                                    platformFilter, dylink: dylink)
             }
             log("Processing command: "+command+" -o \(objectFile)\n")
             log("Current log: \(FileWatcher.derivedLog ?? "no log")")

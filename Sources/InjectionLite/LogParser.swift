@@ -21,7 +21,7 @@ import PopenD
 import Popen
 #endif
 
-struct LogParser {
+struct LogParser: LiteParser {
 
     /// "grep" the most recent build log for the command to recompile a file
     func command(for source: String, platformFilter: String = "",
