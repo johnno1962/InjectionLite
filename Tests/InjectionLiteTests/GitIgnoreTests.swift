@@ -112,15 +112,4 @@ final class GitIgnoreTests: XCTestCase {
         XCTAssertFalse(parser.shouldIgnore(path: "logs/info.txt"))
     }
     
-    func testCacheStatistics() {
-        let gitignoreContent = "*.log\nnode_modules/\n**/*.tmp"
-        let parser = GitIgnoreParser(content: gitignoreContent)
-        
-        // Trigger some pattern matching to populate cache
-        _ = parser.shouldIgnore(path: "debug.log")
-        _ = parser.shouldIgnore(path: "node_modules/package.json")
-        
-        let stats = GitIgnoreParser.getCacheStats()
-        XCTAssertGreaterThan(stats.count, 0, "Cache should contain entries")
-    }
 }

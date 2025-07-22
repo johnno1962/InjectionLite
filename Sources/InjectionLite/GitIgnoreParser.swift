@@ -162,14 +162,4 @@ final class GitIgnoreParser {
         defer { os_unfair_lock_unlock(&cacheLock) }
         matcherCache.removeAll()
     }
-    
-    /// Get cache statistics
-    static func getCacheStats() -> (count: Int, memory: Int) {
-        os_unfair_lock_lock(&cacheLock)
-        defer { os_unfair_lock_unlock(&cacheLock) }
-        
-        let count = matcherCache.count
-        let memory = matcherCache.keys.reduce(0) { $0 + $1.count } * MemoryLayout<Character>.size
-        return (count: count, memory: memory)
-    }
 }
