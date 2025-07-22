@@ -109,7 +109,11 @@ open class InjectionBase: NSObject {
     
     private func isValidSourceFile(_ filePath: String) -> Bool {
         let validExtensions = Set([".swift", ".m", ".mm", ".h", ".c", ".cpp", ".cc"])
-        let fileExtension = "." + (filePath as NSString).pathExtension.lowercased()
+        let pathExtension = (filePath as NSString).pathExtension.lowercased()
+        guard !pathExtension.isEmpty else {
+            return false
+        }
+        let fileExtension = "." + pathExtension
         return validExtensions.contains(fileExtension)
     }
     
