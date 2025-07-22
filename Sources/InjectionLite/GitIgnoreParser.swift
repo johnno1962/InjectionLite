@@ -20,11 +20,7 @@ private final class MatcherWrapper {
 /// Parses .gitignore files and provides pattern matching functionality
 final class GitIgnoreParser {
     private var patterns: [GitIgnorePattern] = []
-    private static let matcherCache: NSCache<NSString, MatcherWrapper> = {
-        let cache = NSCache<NSString, MatcherWrapper>()
-        cache.countLimit = 10_000  // Reasonable limit for pattern matchers
-        return cache
-    }()
+    private static let matcherCache = NSCache<NSString, MatcherWrapper>()
     
     struct GitIgnorePattern {
         let pattern: String

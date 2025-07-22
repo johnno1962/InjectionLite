@@ -21,11 +21,7 @@ open class InjectionBase: NSObject {
 
     public var watcher: FileWatcher?
     private var gitIgnoreParsers: [GitIgnoreParser] = []
-    private let ignoreCache: NSCache<NSString, NSNumber> = {
-        let cache = NSCache<NSString, NSNumber>()
-        cache.countLimit = 50_000  // Cache for many file paths
-        return cache
-    }()
+    private let ignoreCache = NSCache<NSString, NSNumber>()
 
     /// Called from InjectionBoot.m, setup filewatch and wait...
     public override init() {
