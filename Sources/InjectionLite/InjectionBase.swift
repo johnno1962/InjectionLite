@@ -91,11 +91,12 @@ open class InjectionBase: NSObject {
         }
         
         // Check if file should be ignored according to gitignore rules
-        let isDirectory = FileManager.default.fileExists(atPath: filePath, isDirectory: nil)
+        var isDirectory: ObjCBool = false
+        FileManager.default.fileExists(atPath: filePath, isDirectory: &isDirectory)
         var shouldIgnore = false
         
         for parser in gitIgnoreParsers {
-            if parser.shouldIgnore(path: filePath, isDirectory: isDirectory) {
+            if parser.shouldIgnore(path: filePath, isDirectory: isDirectory.boolValue) {
                 shouldIgnore = true
                 break
             }
