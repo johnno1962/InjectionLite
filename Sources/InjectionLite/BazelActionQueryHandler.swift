@@ -135,15 +135,94 @@ public class BazelActionQueryHandler {
         let relativePath = String(sourcePath.dropFirst(workspaceRoot.count))
             .trimmingCharacters(in: CharacterSet(charactersIn: "/"))
         
-        // Query Bazel for targets containing this source file
-        let query = "attr(srcs, \(relativePath), //...)"
-        let targets = try executeBazelQuery(query)
+        // Find all possible Bazel label representations for this file
+        let possibleLabels = try generatePossibleBazelLabels(for: relativePath)
+        
+        var allTargets: [String] = []
+        
+        // Try each possible label representation until we find targets
+        for label in possibleLabels {
+            log("🔍 Trying Bazel query for label: \(label)")
+            let query = "attr(srcs, \(label), //...)"
+            
+            do {
+                let targets = try executeBazelQuery(query)
+                if !targets.isEmpty {
+                    log("✅ Found \(targets.count) targets for label: \(label)")
+                    allTargets.append(contentsOf: targets)
+                }
+            } catch {
+                log("⚠️ Query failed for label \(label): \(error)")
+                continue
+            }
+        }
+        
+        // Remove duplicates while preserving order
+        let uniqueTargets = Array(NSOrderedSet(array: allTargets)) as! [String]
         
         // Cache the results
-        setCachedTargets(targets, for: sourcePath)
+        setCachedTargets(uniqueTargets, for: sourcePath)
         
-        log("✅ Found \(targets.count) targets for \(sourcePath)")
-        return targets
+        log("✅ Found \(uniqueTargets.count) total unique targets for \(sourcePath)")
+        return uniqueTargets
+    }
+    
+    /// Generate all possible Bazel label representations for a relative file path
+    private func generatePossibleBazelLabels(for relativePath: String) throws -> [String] {
+        log("🏷️ Generating possible Bazel labels for: \(relativePath)")
+        
+        var possibleLabels: [String] = []
+        let pathComponents = relativePath.components(separatedBy: "/")
+        
+        // Walk up the directory tree to find all possible package boundaries
+        for i in 0..<pathComponents.count {
+            let packagePath = pathComponents[0..<i].joined(separator: "/")
+            let remainingPath = pathComponents[i...].joined(separator: "/")
+            
+            // Check if this directory has a BUILD file (making it a valid package)
+            let isValidPackage = try hasValidBuildFile(packagePath: packagePath)
+            
+            if isValidPackage {
+                // Generate the Bazel label for this package boundary
+                let bazelLabel: String
+                if packagePath.isEmpty {
+                    // Root package
+                    bazelLabel = remainingPath
+                } else {
+                    // Sub-package - use relative path from this package
+                    bazelLabel = remainingPath
+                }
+                
+                possibleLabels.append(bazelLabel)
+                log("📦 Valid package found at '\(packagePath.isEmpty ? "<root>" : packagePath)' -> label: \(bazelLabel)")
+            }
+        }
+        
+        // If no valid packages found, fall back to the full relative path
+        if possibleLabels.isEmpty {
+            possibleLabels.append(relativePath)
+            log("⚠️ No BUILD files found, using full relative path: \(relativePath)")
+        }
+        
+        log("🏷️ Generated \(possibleLabels.count) possible labels: \(possibleLabels)")
+        return possibleLabels
+    }
+    
+    /// Check if a directory path has a valid BUILD file
+    private func hasValidBuildFile(packagePath: String) throws -> Bool {
+        let fullPackagePath = packagePath.isEmpty ? workspaceRoot : (workspaceRoot as NSString).appendingPathComponent(packagePath)
+        
+        let buildFilePath = (fullPackagePath as NSString).appendingPathComponent("BUILD")
+        let buildBazelPath = (fullPackagePath as NSString).appendingPathComponent("BUILD.bazel")
+        
+        let hasBuildFile = FileManager.default.fileExists(atPath: buildFilePath) ||
+                          FileManager.default.fileExists(atPath: buildBazelPath)
+        
+        if hasBuildFile {
+            log("✅ Found BUILD file in: \(packagePath.isEmpty ? "<root>" : packagePath)")
+        }
+        
+        return hasBuildFile
     }
     
     // MARK: - Private Implementation
