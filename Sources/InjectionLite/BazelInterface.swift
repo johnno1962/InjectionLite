@@ -168,24 +168,6 @@ public class BazelInterface {
         log("✅ Successfully built target: \(target)")
     }
     
-    public func buildHotReloadDylib(for sourcePath: String, target: String) async throws -> String {
-        log("📦 Building hot reload dylib for: \(sourcePath)")
-        
-        // Use aquery to get the exact compilation command
-        let queryHandler = BazelActionQueryHandler(
-            workspaceRoot: workspaceRoot,
-            bazelExecutable: bazelExecutable
-        )
-        
-        let command = try queryHandler.findCompilationCommand(for: sourcePath)
-        
-        log("🔧 Using compilation command: \(command)")
-        
-        // TODO: Transform the command for hot reload dylib generation
-        // This would involve modifying the command to output a dylib instead of object file
-        
-        return "" // Placeholder - implementation needed
-    }
     
     // MARK: - Path Resolution
     
