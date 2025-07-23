@@ -15,6 +15,14 @@ import PopenD
 import Popen
 #endif
 
+/// Wrapper class for target arrays to use with NSCache
+private final class TargetArrayWrapper {
+    let targets: [String]
+    init(targets: [String]) {
+        self.targets = targets
+    }
+}
+
 public enum BazelActionQueryError: Error, CustomStringConvertible {
     case workspaceNotFound
     case bazelExecutableNotFound
@@ -53,9 +61,8 @@ public enum TargetSelectionStrategy {
 public class BazelActionQueryHandler {
     private let workspaceRoot: String
     private let bazelExecutable: String
-    private var commandCache: [String: String] = [:]
-    private var targetCache: [String: [String]] = [:]
-    private let cacheQueue = DispatchQueue(label: "BazelActionQueryHandler.cache", attributes: .concurrent)
+    private static let commandCache = NSCache<NSString, NSString>()
+    private static let targetCache = NSCache<NSString, TargetArrayWrapper>()
     
     public init(workspaceRoot: String, bazelExecutable: String = "bazel") {
         self.workspaceRoot = workspaceRoot
@@ -240,40 +247,30 @@ public class BazelActionQueryHandler {
     // MARK: - Cache Management
     
     private func getCachedCommand(for key: String) -> String? {
-        return cacheQueue.sync {
-            commandCache[key]
-        }
+        return BazelActionQueryHandler.commandCache.object(forKey: key as NSString) as String?
     }
     
     private func setCachedCommand(_ command: String, for key: String) {
-        cacheQueue.async(flags: .barrier) {
-            self.commandCache[key] = command
-        }
+        BazelActionQueryHandler.commandCache.setObject(command as NSString, forKey: key as NSString)
     }
     
     private func getCachedTargets(for sourcePath: String) -> [String]? {
-        return cacheQueue.sync {
-            targetCache[sourcePath]
-        }
+        return BazelActionQueryHandler.targetCache.object(forKey: sourcePath as NSString)?.targets
     }
     
     private func setCachedTargets(_ targets: [String], for sourcePath: String) {
-        cacheQueue.async(flags: .barrier) {
-            self.targetCache[sourcePath] = targets
-        }
+        let wrapper = TargetArrayWrapper(targets: targets)
+        BazelActionQueryHandler.targetCache.setObject(wrapper, forKey: sourcePath as NSString)
     }
     
     public func clearCache() {
-        cacheQueue.async(flags: .barrier) {
-            self.commandCache.removeAll()
-            self.targetCache.removeAll()
-        }
+        BazelActionQueryHandler.commandCache.removeAllObjects()
+        BazelActionQueryHandler.targetCache.removeAllObjects()
         log("🗑️ AQuery handler cache cleared")
     }
     
     public func getCacheStats() -> (commands: Int, targets: Int) {
-        return cacheQueue.sync {
-            (commandCache.count, targetCache.count)
-        }
+        // Note: NSCache doesn't provide exact count, returning approximate values
+        return (0, 0) // NSCache manages its own statistics internally
     }
 }

@@ -10,6 +10,14 @@ import Foundation
 import InjectionImpl
 #endif
 
+/// Wrapper class for Set<String> to use with NSCache
+private final class StringSetWrapper {
+    let stringSet: Set<String>
+    init(stringSet: Set<String>) {
+        self.stringSet = stringSet
+    }
+}
+
 public enum BazelPathError: Error, CustomStringConvertible {
     case invalidPath(String)
     case packageNotFound(String)
@@ -40,10 +48,9 @@ public class BazelPathResolver {
     private let workspaceRoot: String
     private let bazelExecutable: String
     
-    // Thread-safe caches
-    private var packageCache: [String: String] = [:]
-    private var buildFileCache: Set<String> = []
-    private let cacheQueue = DispatchQueue(label: "BazelPathResolver.cache", attributes: .concurrent)
+    // Thread-safe caches using NSCache
+    private static let packageCache = NSCache<NSString, NSString>()
+    private static let buildFileCache = NSCache<NSString, StringSetWrapper>()
     
     public init(workspaceRoot: String, bazelExecutable: String = "bazel") {
         self.workspaceRoot = workspaceRoot
@@ -146,33 +153,26 @@ public class BazelPathResolver {
     // MARK: - Cache Management
     
     private func getCachedPackage(for path: String) -> String? {
-        return cacheQueue.sync {
-            packageCache[path]
-        }
+        return BazelPathResolver.packageCache.object(forKey: path as NSString) as String?
     }
     
     private func setCachedPackage(_ package: String, for path: String) {
-        cacheQueue.async(flags: .barrier) {
-            self.packageCache[path] = package
-        }
+        BazelPathResolver.packageCache.setObject(package as NSString, forKey: path as NSString)
     }
     
     private func setCachedBuildFiles(_ files: Set<String>) {
-        cacheQueue.async(flags: .barrier) {
-            self.buildFileCache = files
-        }
+        let wrapper = StringSetWrapper(stringSet: files)
+        BazelPathResolver.buildFileCache.setObject(wrapper, forKey: "buildFiles" as NSString)
     }
     
     public func invalidateCache(for path: String? = nil) {
-        cacheQueue.async(flags: .barrier) {
-            if let path = path {
-                self.packageCache.removeValue(forKey: path)
-                log("🗑️ Invalidated cache for path: \(path)")
-            } else {
-                self.packageCache.removeAll()
-                self.buildFileCache.removeAll()
-                log("🗑️ Invalidated all path resolver caches")
-            }
+        if let path = path {
+            BazelPathResolver.packageCache.removeObject(forKey: path as NSString)
+            log("🗑️ Invalidated cache for path: \(path)")
+        } else {
+            BazelPathResolver.packageCache.removeAllObjects()
+            BazelPathResolver.buildFileCache.removeAllObjects()
+            log("🗑️ Invalidated all path resolver caches")
         }
     }
     

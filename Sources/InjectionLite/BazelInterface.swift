@@ -47,8 +47,7 @@ public enum BazelError: Error, CustomStringConvertible {
 public class BazelInterface {
     private let workspaceRoot: String
     private let bazelExecutable: String
-    private var sourceToTargetCache: [String: String] = [:]
-    private let cacheQueue = DispatchQueue(label: "BazelInterface.cache", attributes: .concurrent)
+    private static let sourceToTargetCache = NSCache<NSString, NSString>()
     
     public init(workspaceRoot: String, bazelExecutable: String = "bazel") throws {
         // Validate workspace
@@ -253,21 +252,15 @@ public class BazelInterface {
     // MARK: - Cache Management
     
     private func getCachedTarget(for sourcePath: String) -> String? {
-        return cacheQueue.sync {
-            sourceToTargetCache[sourcePath]
-        }
+        return BazelInterface.sourceToTargetCache.object(forKey: sourcePath as NSString) as String?
     }
     
     private func setCachedTarget(_ target: String, for sourcePath: String) {
-        cacheQueue.async(flags: .barrier) {
-            self.sourceToTargetCache[sourcePath] = target
-        }
+        BazelInterface.sourceToTargetCache.setObject(target as NSString, forKey: sourcePath as NSString)
     }
     
     public func clearCache() {
-        cacheQueue.async(flags: .barrier) {
-            self.sourceToTargetCache.removeAll()
-        }
+        BazelInterface.sourceToTargetCache.removeAllObjects()
         log("🗑️ Bazel target cache cleared")
     }
 }
