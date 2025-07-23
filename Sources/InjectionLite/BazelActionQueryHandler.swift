@@ -170,7 +170,7 @@ public class BazelActionQueryHandler {
         // Use aquery to get the compilation action for this target
         let query = "mnemonic('SwiftCompile', deps(\(target)))"
         
-        let command = "cd '\(workspaceRoot)' && \(bazelExecutable) aquery '\(query)' --output=textproto"
+        let command = "\(bazelExecutable) aquery '\(query)' --output=textproto"
         
         guard let result = Popen(cmd: command) else {
             throw BazelActionQueryError.queryExecutionFailed("Failed to execute aquery")
@@ -227,7 +227,7 @@ public class BazelActionQueryHandler {
     }
     
     private func executeBazelQuery(_ query: String) throws -> [String] {
-        let command = "cd '\(workspaceRoot)' && \(bazelExecutable) query '\(query)'"
+        let command = "\(bazelExecutable) query '\(query)'"
         
         guard let result = Popen(cmd: command) else {
             throw BazelActionQueryError.queryExecutionFailed("Failed to execute query")

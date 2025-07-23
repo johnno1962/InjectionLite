@@ -120,7 +120,7 @@ public class BazelInterface {
             .trimmingCharacters(in: CharacterSet(charactersIn: "/"))
         
         // Query for targets that include this source file
-        let queryCommand = "cd '\(workspaceRoot)' && \(bazelExecutable) query 'attr(srcs, \(relativePath), //...)'"
+        let queryCommand = "\(bazelExecutable) query 'attr(srcs, \(relativePath), //...)'"
         
         guard let result = Popen(cmd: queryCommand)?.readAll() else {
             throw BazelError.queryFailed("Failed to execute query for \(relativePath)")
@@ -156,8 +156,7 @@ public class BazelInterface {
         buildCommand += " --swiftcopt=-enable-library-evolution"
         buildCommand += " --compilation_mode=dbg"
         
-        let cdCommand = "cd '\(workspaceRoot)' && \(buildCommand)"
-        guard let result = Popen(cmd: cdCommand) else {
+        guard let result = Popen(cmd: buildCommand) else {
             throw BazelError.buildFailed("Failed to execute build command")
         }
         
@@ -244,7 +243,7 @@ public class BazelInterface {
     }
     
     private func getBazelInfo(_ key: String) -> String? {
-        let command = "cd '\(workspaceRoot)' && \(bazelExecutable) info \(key)"
+        let command = "\(bazelExecutable) info \(key)"
         guard let result = Popen(cmd: command) else {
             return nil
         }
