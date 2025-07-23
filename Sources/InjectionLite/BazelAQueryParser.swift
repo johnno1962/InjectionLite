@@ -20,7 +20,6 @@ public class BazelAQueryParser: LiteParser {
     private let bazelExecutable: String
     private let bazelInterface: BazelInterface
     private let actionQueryHandler: BazelActionQueryHandler
-    private let pathNormalizer: BazelPathNormalizer
     
     // Cache for compilation commands using NSCache for thread-safety and memory management
     private static let commandCache = NSCache<NSString, NSString>()
@@ -36,11 +35,6 @@ public class BazelAQueryParser: LiteParser {
         )
         
         self.actionQueryHandler = BazelActionQueryHandler(
-            workspaceRoot: workspaceRoot,
-            bazelExecutable: bazelExecutable
-        )
-        
-        self.pathNormalizer = BazelPathNormalizer(
             workspaceRoot: workspaceRoot,
             bazelExecutable: bazelExecutable
         )
@@ -84,11 +78,8 @@ public class BazelAQueryParser: LiteParser {
                 strategy: .mostSpecific
             )
             
-            // Normalize paths in the command for local execution
-            let normalizedCommand = try pathNormalizer.normalizeCompilationCommand(command)
-            
             // Clean and prepare command for hot reloading execution
-            let cleanedCommand = cleanBazelCommand(normalizedCommand)
+            let cleanedCommand = cleanBazelCommand(command)
             
             // Apply platform filter if specified
             let filteredCommand = applyPlatformFilter(cleanedCommand, filter: platformFilter)
@@ -273,7 +264,6 @@ public class BazelAQueryParser: LiteParser {
         // Clear caches in components
         actionQueryHandler.clearCache()
         bazelInterface.clearCache()
-        pathNormalizer.clearPathInfo()
         
         log("🗑️ BazelAQueryParser cache cleared")
     }
