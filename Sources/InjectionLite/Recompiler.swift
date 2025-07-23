@@ -47,7 +47,19 @@ public struct Recompiler {
     }
   
     func parser(forProjectContaining source: String) -> LiteParser {
-        // AQuery support?
+        // Check if this is a Bazel workspace
+        if let workspaceRoot = BazelInterface.findWorkspaceRoot(containing: source) {
+            log("🔍 Detected Bazel workspace at: \(workspaceRoot)")
+            do {
+                let bazelParser = try BazelAQueryParser(workspaceRoot: workspaceRoot)
+                log("✅ Using BazelAQueryParser for \(source)")
+                return bazelParser
+            } catch {
+                log("⚠️ Failed to create BazelAQueryParser: \(error), falling back to LogParser")
+            }
+        }
+        
+        // Fallback to traditional Xcode log parsing
         return LogParser()
     }
 
