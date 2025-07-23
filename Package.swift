@@ -38,8 +38,7 @@ let package = Package(
             name: "InjectionLite",
             dependencies: ["InjectionImpl",
                 // DEBUG_ONLY version of abstraction for popen().
-                .product(name: "PopenD", package: "Popen"),
-]),
+                .product(name: "PopenD", package: "Popen")]),
         // Implementation of "Swizzling for Swift" using interposing et all.
         .target(
             name: "InjectionImpl",
