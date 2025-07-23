@@ -275,12 +275,4 @@ public class BazelAQueryParser: LiteParser {
         log("✅ Bazel workspace validation passed")
     }
     
-    // MARK: - Convenience Methods
-    
-    /// Check if the given source file exists in a Bazel target
-    public func isSourceInBazelTarget(_ sourcePath: String) -> Bool {
-        // Simplified synchronous implementation
-        // In a real implementation, this would use Bazel query commands
-        return true // Placeholder
-    }
 }
