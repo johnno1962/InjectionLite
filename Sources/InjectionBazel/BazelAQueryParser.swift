@@ -9,12 +9,11 @@
 import Foundation
 #if canImport(InjectionImpl)
 import InjectionImpl
+import DLKitD
 #endif
 #if canImport(PopenD)
-import DLKitD
 import PopenD
 #else
-import DLKit
 import Popen
 #endif
 
