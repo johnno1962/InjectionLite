@@ -64,7 +64,9 @@ open class InjectionBase: NSObject {
         let isVapor = Reloader.injectionQueue != .main
         watcher = FileWatcher(roots: dirs, callback: { filesChanged in
             for file in filesChanged {
-                if self.shouldProcessFile(file) {
+                if let whyNot = self.shouldExclude(file: file) {
+                    log("\(file) excluded as \(whyNot)")
+                } else {
                     self.inject(source: file)
                 }
             }
@@ -79,15 +81,15 @@ open class InjectionBase: NSObject {
         fatalError("Subclass responsibilty: "+#function)
     }
     
-    private func shouldProcessFile(_ filePath: String) -> Bool {
+    private func shouldExclude(file filePath: String) -> String? {
         // Early exit: Only process relevant source files
         guard isValidSourceFile(filePath) else {
-            return false
+            return "not a valid source file"
         }
         
         // Use cached result if available
         if let cachedResult = ignoreCache.object(forKey: filePath as NSString) {
-            return !cachedResult.boolValue
+            return cachedResult.boolValue ? "gitignore rule" : nil
         }
         
         // Check if file should be ignored according to gitignore rules
@@ -105,7 +107,7 @@ open class InjectionBase: NSObject {
         // Cache the result - NSCache handles memory management automatically
         ignoreCache.setObject(NSNumber(value: shouldIgnore), forKey: filePath as NSString)
         
-        return !shouldIgnore
+        return shouldIgnore ? "gitignore rule" : nil
     }
     
     private func isValidSourceFile(_ filePath: String) -> Bool {
