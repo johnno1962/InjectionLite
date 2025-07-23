@@ -38,7 +38,7 @@ final class BazelTests: XCTestCase {
     func testBazelWorkspaceDetectionWithMODULE() {
         // Create MODULE.bazel file
         let moduleFile = tempWorkspaceURL.appendingPathComponent("MODULE.bazel")
-        try! "module(name = \"test\")".write(to: moduleFile, atomically: true, encoding: .utf8)
+        XCTAssertNoThrow(try "module(name = \"test\")".write(to: moduleFile, atomically: true, encoding: .utf8))
         
         // Test detection
         XCTAssertTrue(BazelInterface.isBazelWorkspace(containing: workspacePath))
