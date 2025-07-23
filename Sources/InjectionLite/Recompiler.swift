@@ -15,6 +15,7 @@
 #if DEBUG || !SWIFT_PACKAGE
 #if canImport(InjectionImplC)
 import InjectionImplC
+import InjectionBazel
 import InjectionImpl
 #endif
 import Foundation
@@ -30,10 +31,6 @@ extension String {
     }
 }
 
-public protocol LiteParser {
-  func command(for source: String, platformFilter: String,
-               found: inout (logDir: String, scanner: Popen?)?) -> String?
-}
 
 public struct Recompiler {
 

@@ -1,10 +1,11 @@
 //
 //  BazelInterface.swift
-//  InjectionLite
+//  InjectionBazel
 //
 //  Bazel build system interface for hot reloading support
 //
 
+#if DEBUG || !SWIFT_PACKAGE
 import Foundation
 #if canImport(InjectionImpl)
 import InjectionImpl
@@ -246,3 +247,4 @@ public class BazelInterface {
         log("🗑️ Bazel target cache cleared")
     }
 }
+#endif

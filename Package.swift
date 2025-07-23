@@ -5,6 +5,7 @@ import PackageDescription
 
 let package = Package(
     name: "InjectionLite",
+    platforms: [.iOS("13"), .macOS("14")],
     products: [
         // Products define the executables and libraries a package produces, and make them visible to other packages.
         // A self-contained of injection including log parsing and recompiling
@@ -36,7 +37,7 @@ let package = Package(
         // The stand-alone implementation, delegating actual "swizzing" to InjectionImpl
         .target(
             name: "InjectionLite",
-            dependencies: ["InjectionImpl",
+            dependencies: ["InjectionImpl", "InjectionBazel",
                 // DEBUG_ONLY version of abstraction for popen().
                 .product(name: "PopenD", package: "Popen")]),
         // Implementation of "Swizzling for Swift" using interposing et all.
@@ -47,11 +48,19 @@ let package = Package(
                 .product(name: "SwiftRegexD", package: "SwiftRegex")]),
         // Boots up standalone injection on load for InjectionLite product
         .target(
+            name: "InjectionBazel", dependencies: ["InjectionImpl",
+                .product(name: "DLKitD", package: "DLKit")]),
+        .target(
             name: "InjectionImplC"),
         // Yes, there are tests.
         .testTarget(
             name: "InjectionLiteTests",
             dependencies: ["InjectionLite"],
+            linkerSettings: [.unsafeFlags([
+                "-Xlinker", "-interposable"])]),
+        .testTarget(
+            name: "InjectionBazelTests",
+            dependencies: ["InjectionBazel"],
             linkerSettings: [.unsafeFlags([
                 "-Xlinker", "-interposable"])])]
 )

@@ -1,10 +1,11 @@
 //
 //  BazelActionQueryHandler.swift
-//  InjectionLite
+//  InjectionBazel
 //
 //  Handles Bazel AQuery operations for extracting Swift compilation commands
 //
 
+#if DEBUG || !SWIFT_PACKAGE
 import Foundation
 #if canImport(InjectionImpl)
 import InjectionImpl
@@ -439,3 +440,4 @@ public class BazelActionQueryHandler {
         return (0, 0) // NSCache manages its own statistics internally
     }
 }
+#endif

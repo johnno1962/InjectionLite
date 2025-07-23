@@ -1,19 +1,27 @@
 //
 //  BazelAQueryParser.swift
-//  InjectionLite
+//  InjectionBazel
 //
 //  Bazel AQuery parser implementing LiteParser protocol for hot reloading
 //
 
+#if DEBUG || !SWIFT_PACKAGE
 import Foundation
 #if canImport(InjectionImpl)
 import InjectionImpl
 #endif
 #if canImport(PopenD)
+import DLKitD
 import PopenD
 #else
+import DLKit
 import Popen
 #endif
+
+public protocol LiteParser {
+  func command(for source: String, platformFilter: String,
+               found: inout (logDir: String, scanner: Popen?)?) -> String?
+}
 
 public class BazelAQueryParser: LiteParser {
     private let workspaceRoot: String
@@ -273,3 +281,4 @@ public class BazelAQueryParser: LiteParser {
     }
     
 }
+#endif
