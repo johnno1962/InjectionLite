@@ -85,23 +85,36 @@ public class BazelActionQueryHandler {
             return cachedCommand
         }
         
-        // Find targets that contain this source file
+        // Find all targets that contain this source file
         let targets = try findTargets(for: sourcePath)
         guard !targets.isEmpty else {
             throw BazelActionQueryError.noTargetsFound(sourcePath)
         }
         
-        // Select target based on strategy
-        let selectedTarget = selectTarget(from: targets, for: sourcePath, strategy: strategy)
+        // Sort targets by strategy preference for iteration
+        let sortedTargets = sortTargetsByStrategy(targets, for: sourcePath, strategy: strategy)
         
-        // Get compilation command for the selected target
-        let command = try getCompilationCommand(for: selectedTarget, sourcePath: sourcePath)
+        // Try each target until we find one that actually includes our source file in its inputs
+        var lastError: BazelActionQueryError?
+        for target in sortedTargets {
+            do {
+                log("🎯 Trying target: \(target)")
+                let command = try getCompilationCommand(for: target, sourcePath: sourcePath)
+                
+                // Cache the successful result
+                setCachedCommand(command, for: cacheKey)
+                
+                log("✅ Found compilation command for \(sourcePath) in target: \(target)")
+                return command
+            } catch let error as BazelActionQueryError {
+                log("⚠️ Target \(target) doesn't include \(sourcePath) in inputs, trying next...")
+                lastError = error
+                continue
+            }
+        }
         
-        // Cache the result
-        setCachedCommand(command, for: cacheKey)
-        
-        log("✅ Found compilation command for \(sourcePath)")
-        return command
+        // If we get here, no target actually included our source file in its inputs
+        throw lastError ?? BazelActionQueryError.noCompilationCommandFound(sourcePath)
     }
     
     /// Find all targets that contain the given source file
@@ -135,32 +148,43 @@ public class BazelActionQueryHandler {
     
     // MARK: - Private Implementation
     
-    private func selectTarget(
-        from targets: [String],
+    private func sortTargetsByStrategy(
+        _ targets: [String],
         for sourcePath: String,
         strategy: TargetSelectionStrategy
-    ) -> String {
+    ) -> [String] {
         switch strategy {
         case .first:
-            return targets.first!
+            return targets
             
         case .mostSpecific:
-            // Select target with the longest path (most specific)
-            return targets.max { $0.count < $1.count } ?? targets.first!
+            // Sort by path length (most specific first)
+            return targets.sorted { $0.count > $1.count }
             
         case .primaryTarget:
+            var sortedTargets = targets
+            
             // Use heuristics to find the primary target
             // Prefer targets that end with the file name (without extension)
             let fileName = (sourcePath as NSString).lastPathComponent
             let baseName = (fileName as NSString).deletingPathExtension
             
-            // Look for targets that end with the base name
-            if let primaryTarget = targets.first(where: { $0.hasSuffix(":\(baseName)") }) {
-                return primaryTarget
+            // Sort with primary target candidates first
+            sortedTargets.sort { target1, target2 in
+                let target1IsPrimary = target1.hasSuffix(":\(baseName)")
+                let target2IsPrimary = target2.hasSuffix(":\(baseName)")
+                
+                if target1IsPrimary && !target2IsPrimary {
+                    return true
+                } else if !target1IsPrimary && target2IsPrimary {
+                    return false
+                } else {
+                    // Both are primary or both are not, sort by specificity
+                    return target1.count > target2.count
+                }
             }
             
-            // Fallback to most specific
-            return targets.max { $0.count < $1.count } ?? targets.first!
+            return sortedTargets
         }
     }
     
@@ -190,40 +214,150 @@ public class BazelActionQueryHandler {
     }
     
     private func parseSwiftCompilationCommand(from textproto: String, sourcePath: String) throws -> String {
-        // Parse the textproto output to find Swift compilation actions
+        // Parse the human-readable aquery output format
         let lines = textproto.components(separatedBy: .newlines)
-        var currentAction: [String: String] = [:]
-        var inAction = false
-        var arguments: [String] = []
+        var mnemonic = ""
+        var commandLine = ""
+        var environment: [String: String] = [:]
+        var inputs: [String] = []
+        
+        var inCommandLine = false
+        var inEnvironment = false
+        var commandLineBuffer = ""
         
         for line in lines {
             let trimmed = line.trimmingCharacters(in: .whitespaces)
             
-            if trimmed.hasPrefix("actions {") {
-                inAction = true
-                currentAction = [:]
-                arguments = []
-            } else if trimmed == "}" && inAction {
-                // End of action, check if it's a Swift compilation for our source
-                if currentAction["mnemonic"] == "SwiftCompile" && 
-                   arguments.contains(where: { $0.contains(sourcePath) }) {
-                    // Reconstruct the compilation command
-                    return arguments.joined(separator: " ")
+            // Parse Mnemonic
+            if trimmed.hasPrefix("Mnemonic: ") {
+                mnemonic = String(trimmed.dropFirst("Mnemonic: ".count))
+            }
+            // Parse Environment section
+            else if trimmed.hasPrefix("Environment: [") {
+                inEnvironment = true
+                let envContent = String(trimmed.dropFirst("Environment: [".count))
+                if envContent.hasSuffix("]") {
+                    // Single line environment
+                    let envString = String(envContent.dropLast(1))
+                    environment = parseEnvironmentString(envString)
+                    inEnvironment = false
                 }
-                inAction = false
-            } else if inAction {
-                if trimmed.hasPrefix("mnemonic: ") {
-                    currentAction["mnemonic"] = String(trimmed.dropFirst("mnemonic: ".count))
-                        .trimmingCharacters(in: CharacterSet(charactersIn: "\""))
-                } else if trimmed.hasPrefix("arguments: ") {
-                    let arg = String(trimmed.dropFirst("arguments: ".count))
-                        .trimmingCharacters(in: CharacterSet(charactersIn: "\""))
-                    arguments.append(arg)
+            }
+            else if inEnvironment {
+                if trimmed.hasSuffix("]") {
+                    // End of multi-line environment
+                    let envContent = String(trimmed.dropLast(1))
+                    if !envContent.isEmpty {
+                        let envDict = parseEnvironmentString(envContent)
+                        environment.merge(envDict) { _, new in new }
+                    }
+                    inEnvironment = false
+                } else {
+                    // Continue parsing environment
+                    let envDict = parseEnvironmentString(trimmed)
+                    environment.merge(envDict) { _, new in new }
+                }
+            }
+            // Parse Inputs to check if our source file is included
+            else if trimmed.hasPrefix("Inputs: [") {
+                let inputsContent = String(trimmed.dropFirst("Inputs: [".count))
+                if inputsContent.hasSuffix("]") {
+                    let inputsString = String(inputsContent.dropLast(1))
+                    inputs = parseInputsList(inputsString)
+                }
+            }
+            // Parse Command Line section
+            else if trimmed.hasPrefix("Command Line: (exec ") {
+                inCommandLine = true
+                commandLineBuffer = String(trimmed.dropFirst("Command Line: (exec ".count))
+                if commandLineBuffer.hasSuffix(")") {
+                    // Single line command
+                    commandLine = String(commandLineBuffer.dropLast(1))
+                    inCommandLine = false
+                }
+            }
+            else if inCommandLine {
+                if trimmed.hasSuffix(")") {
+                    // End of multi-line command
+                    commandLineBuffer += " " + String(trimmed.dropLast(1))
+                    commandLine = commandLineBuffer
+                    inCommandLine = false
+                } else {
+                    // Continue building command line
+                    commandLineBuffer += " " + trimmed
                 }
             }
         }
         
-        throw BazelActionQueryError.noCompilationCommandFound(sourcePath)
+        // Check if this is a SwiftCompile action for our source file
+        guard mnemonic == "SwiftCompile" else {
+            throw BazelActionQueryError.noCompilationCommandFound("Not a SwiftCompile action")
+        }
+        
+        // Check if our source file is in the inputs
+        let sourceFileName = (sourcePath as NSString).lastPathComponent
+        let hasSourceFile = inputs.contains { input in
+            input.contains(sourceFileName) || input.hasSuffix(sourceFileName)
+        }
+        
+        guard hasSourceFile else {
+            throw BazelActionQueryError.noCompilationCommandFound("Source file not found in inputs")
+        }
+        
+        // Clean up the command line and combine with environment
+        let cleanedCommand = cleanupCommandLine(commandLine)
+        let finalCommand = combineEnvironmentAndCommand(environment: environment, command: cleanedCommand)
+        
+        return finalCommand
+    }
+    
+    private func parseEnvironmentString(_ envString: String) -> [String: String] {
+        var environment: [String: String] = [:]
+        
+        // Split by comma and parse KEY=VALUE pairs
+        let envPairs = envString.components(separatedBy: ", ")
+        for pair in envPairs {
+            let trimmedPair = pair.trimmingCharacters(in: .whitespacesAndNewlines)
+            if trimmedPair.isEmpty { continue }
+            
+            if let equalIndex = trimmedPair.firstIndex(of: "=") {
+                let key = String(trimmedPair[..<equalIndex])
+                let value = String(trimmedPair[trimmedPair.index(after: equalIndex)...])
+                environment[key] = value
+            }
+        }
+        
+        return environment
+    }
+    
+    private func parseInputsList(_ inputsString: String) -> [String] {
+        // Split by comma and clean up
+        return inputsString.components(separatedBy: ", ")
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty }
+    }
+    
+    private func cleanupCommandLine(_ commandLine: String) -> String {
+        // Remove line continuation backslashes and normalize whitespace
+        return commandLine
+            .replacingOccurrences(of: " \\\n", with: " ")
+            .replacingOccurrences(of: " \\", with: " ")
+            .replacingOccurrences(of: "\\s+", with: " ", options: .regularExpression)
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+    
+    private func combineEnvironmentAndCommand(environment: [String: String], command: String) -> String {
+        // Convert environment dictionary to export statements
+        let envExports = environment.map { key, value in
+            "export \(key)=\"\(value)\""
+        }.joined(separator: " && ")
+        
+        // Combine environment and command
+        if envExports.isEmpty {
+            return command
+        } else {
+            return "\(envExports) && \(command)"
+        }
     }
     
     private func executeBazelQuery(_ query: String) throws -> [String] {
