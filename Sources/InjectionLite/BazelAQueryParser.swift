@@ -22,9 +22,8 @@ public class BazelAQueryParser: LiteParser {
     private let actionQueryHandler: BazelActionQueryHandler
     private let pathNormalizer: BazelPathNormalizer
     
-    // Cache for compilation commands
-    private var commandCache: [String: String] = [:]
-    private let cacheQueue = DispatchQueue(label: "BazelAQueryParser.cache", attributes: .concurrent)
+    // Cache for compilation commands using NSCache for thread-safety and memory management
+    private static let commandCache = NSCache<NSString, NSString>()
     
     public init(workspaceRoot: String, bazelExecutable: String = "bazel") throws {
         self.workspaceRoot = workspaceRoot
@@ -120,21 +119,15 @@ public class BazelAQueryParser: LiteParser {
     // MARK: - Cache Management
     
     private func getCachedCommand(for key: String) -> String? {
-        return cacheQueue.sync {
-            commandCache[key]
-        }
+        return BazelAQueryParser.commandCache.object(forKey: key as NSString) as String?
     }
     
     private func setCachedCommand(_ command: String, for key: String) {
-        cacheQueue.async(flags: .barrier) {
-            self.commandCache[key] = command
-        }
+        BazelAQueryParser.commandCache.setObject(command as NSString, forKey: key as NSString)
     }
     
     public func clearCache() {
-        cacheQueue.async(flags: .barrier) {
-            self.commandCache.removeAll()
-        }
+        BazelAQueryParser.commandCache.removeAllObjects()
         
         // Clear caches in components
         actionQueryHandler.clearCache()
