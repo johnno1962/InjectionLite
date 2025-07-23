@@ -20,6 +20,8 @@ import Foundation
 open class InjectionBase: NSObject {
 
     public var watcher: FileWatcher?
+    private var gitIgnoreParsers: [GitIgnoreParser] = []
+    private let ignoreCache = NSCache<NSString, NSNumber>()
 
     /// Called from InjectionBoot.m, setup filewatch and wait...
     public override init() {
@@ -53,10 +55,20 @@ open class InjectionBase: NSObject {
     }
 
     func fileWatch(dirs: [String]) {
+        // Load gitignore files for watched directories
+        for dir in dirs {
+            let parsers = GitIgnoreParser.findGitIgnoreFiles(startingFrom: dir)
+            gitIgnoreParsers.append(contentsOf: parsers)
+        }
+        
         let isVapor = Reloader.injectionQueue != .main
         watcher = FileWatcher(roots: dirs, callback: { filesChanged in
             for file in filesChanged {
-                self.inject(source: file)
+                if let whyNot = self.shouldExclude(file: file) {
+                    log("\(file) excluded as \(whyNot)")
+                } else {
+                    self.inject(source: file)
+                }
             }
         }, runLoop: isVapor ? CFRunLoopGetCurrent() : nil)
         log(APP_NAME+": Watching for source changes under \(dirs)/...")
@@ -68,5 +80,45 @@ open class InjectionBase: NSObject {
     func inject(source: String) {
         fatalError("Subclass responsibilty: "+#function)
     }
+    
+    private func shouldExclude(file filePath: String) -> String? {
+        // Early exit: Only process relevant source files
+        guard isValidSourceFile(filePath) else {
+            return "not a valid source file"
+        }
+        
+        // Use cached result if available
+        if let cachedResult = ignoreCache.object(forKey: filePath as NSString) {
+            return cachedResult.boolValue ? "gitignore rule" : nil
+        }
+        
+        // Check if file should be ignored according to gitignore rules
+        var isDirectory: ObjCBool = false
+        FileManager.default.fileExists(atPath: filePath, isDirectory: &isDirectory)
+        var shouldIgnore = false
+        
+        for parser in gitIgnoreParsers {
+            if parser.shouldIgnore(path: filePath, isDirectory: isDirectory.boolValue) {
+                shouldIgnore = true
+                break
+            }
+        }
+        
+        // Cache the result - NSCache handles memory management automatically
+        ignoreCache.setObject(NSNumber(value: shouldIgnore), forKey: filePath as NSString)
+        
+        return shouldIgnore ? "gitignore rule" : nil
+    }
+    
+    private func isValidSourceFile(_ filePath: String) -> Bool {
+        let validExtensions = Set([".swift", ".m", ".mm", ".h", ".c", ".cpp", ".cc"])
+        let pathExtension = (filePath as NSString).pathExtension.lowercased()
+        guard !pathExtension.isEmpty else {
+            return false
+        }
+        let fileExtension = "." + pathExtension
+        return validExtensions.contains(fileExtension)
+    }
+    
 }
 #endif
