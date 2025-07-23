@@ -52,10 +52,12 @@ public class BazelInterface {
     public init(workspaceRoot: String, bazelExecutable: String = "bazel") throws {
         // Validate workspace
         let moduleFile = (workspaceRoot as NSString).appendingPathComponent("MODULE.bazel")
+        let modulePlainFile = (workspaceRoot as NSString).appendingPathComponent("MODULE")
         let workspaceFile = (workspaceRoot as NSString).appendingPathComponent("WORKSPACE")
         let workspaceBazelFile = (workspaceRoot as NSString).appendingPathComponent("WORKSPACE.bazel")
         
         guard FileManager.default.fileExists(atPath: moduleFile) ||
+              FileManager.default.fileExists(atPath: modulePlainFile) ||
               FileManager.default.fileExists(atPath: workspaceFile) ||
               FileManager.default.fileExists(atPath: workspaceBazelFile) else {
             throw BazelError.workspaceNotFound(workspaceRoot)
@@ -77,10 +79,12 @@ public class BazelInterface {
         
         while currentPath != "/" && !currentPath.isEmpty {
             let moduleFile = (currentPath as NSString).appendingPathComponent("MODULE.bazel")
+            let modulePlainFile = (currentPath as NSString).appendingPathComponent("MODULE")
             let workspaceFile = (currentPath as NSString).appendingPathComponent("WORKSPACE")
             let workspaceBazelFile = (currentPath as NSString).appendingPathComponent("WORKSPACE.bazel")
             
             if FileManager.default.fileExists(atPath: moduleFile) ||
+               FileManager.default.fileExists(atPath: modulePlainFile) ||
                FileManager.default.fileExists(atPath: workspaceFile) ||
                FileManager.default.fileExists(atPath: workspaceBazelFile) {
                 return currentPath

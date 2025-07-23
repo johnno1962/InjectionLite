@@ -71,6 +71,18 @@ final class BazelTests: XCTestCase {
         XCTAssertEqual(foundRoot, workspacePath)
     }
     
+    func testBazelWorkspaceDetectionWithPlainMODULE() {
+        // Create plain MODULE file (without .bazel extension)
+        let moduleFile = tempWorkspaceURL.appendingPathComponent("MODULE")
+        try! "module(name = \"test\")".write(to: moduleFile, atomically: true, encoding: .utf8)
+        
+        // Test detection
+        XCTAssertTrue(BazelInterface.isBazelWorkspace(containing: workspacePath))
+        
+        let foundRoot = BazelInterface.findWorkspaceRoot(containing: workspacePath)
+        XCTAssertEqual(foundRoot, workspacePath)
+    }
+    
     func testNonBazelWorkspaceDetection() {
         // No Bazel files - should not be detected as Bazel workspace
         XCTAssertFalse(BazelInterface.isBazelWorkspace(containing: workspacePath))
