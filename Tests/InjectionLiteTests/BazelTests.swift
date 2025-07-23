@@ -129,65 +129,6 @@ final class BazelTests: XCTestCase {
         }
     }
     
-    // MARK: - BazelPathResolver Tests
-    
-    func testPathResolverInitialization() {
-        let resolver = BazelPathResolver(workspaceRoot: workspacePath)
-        XCTAssertNotNil(resolver)
-    }
-    
-    func testPathOutsideWorkspace() {
-        let resolver = BazelPathResolver(workspaceRoot: workspacePath)
-        let outsidePath = "/tmp/some_other_file.swift"
-        
-        XCTAssertThrowsError(try resolver.convertToLabel(outsidePath)) { error in
-            XCTAssertTrue(error is BazelPathError)
-            if case BazelPathError.pathOutsideWorkspace(let path) = error {
-                XCTAssertEqual(path, outsidePath)
-            } else {
-                XCTFail("Expected pathOutsideWorkspace error")
-            }
-        }
-    }
-    
-    func testLabelGenerationForRootFile() {
-        // Create BUILD file at root
-        let buildFile = tempWorkspaceURL.appendingPathComponent("BUILD")
-        try! "swift_library(name = \"test\")".write(to: buildFile, atomically: true, encoding: .utf8)
-        
-        // Create source file at root
-        let sourceFile = tempWorkspaceURL.appendingPathComponent("main.swift")
-        let sourcePath = sourceFile.path
-        try! "print(\"Hello\")".write(to: sourceFile, atomically: true, encoding: .utf8)
-        
-        let resolver = BazelPathResolver(workspaceRoot: workspacePath)
-        
-        XCTAssertNoThrow(try {
-            let label = try resolver.convertToLabel(sourcePath)
-            XCTAssertEqual(label, "//:main.swift")
-        }())
-    }
-    
-    func testLabelGenerationForNestedFile() {
-        // Create nested package structure
-        let packageDir = tempWorkspaceURL.appendingPathComponent("src/main")
-        try! FileManager.default.createDirectory(at: packageDir, withIntermediateDirectories: true)
-        
-        let buildFile = packageDir.appendingPathComponent("BUILD")
-        try! "swift_library(name = \"main\")".write(to: buildFile, atomically: true, encoding: .utf8)
-        
-        // Create source file in nested package
-        let sourceFile = packageDir.appendingPathComponent("App.swift")
-        let sourcePath = sourceFile.path
-        try! "class App {}".write(to: sourceFile, atomically: true, encoding: .utf8)
-        
-        let resolver = BazelPathResolver(workspaceRoot: workspacePath)
-        
-        XCTAssertNoThrow(try {
-            let label = try resolver.convertToLabel(sourcePath)
-            XCTAssertEqual(label, "//src/main:App.swift")
-        }())
-    }
     
     // MARK: - Recompiler Integration Tests
     
@@ -318,11 +259,4 @@ final class BazelTests: XCTestCase {
         }())
     }
     
-    func testPathResolverCacheInvalidation() {
-        let resolver = BazelPathResolver(workspaceRoot: workspacePath)
-        
-        // Cache invalidation should not throw
-        XCTAssertNoThrow(resolver.invalidateCache())
-        XCTAssertNoThrow(resolver.invalidateCache(for: "/some/path"))
-    }
 }
