@@ -12,6 +12,7 @@
 //
 #if DEBUG || !SWIFT_PACKAGE
 #if canImport(InjectionImpl)
+import InjectionBazel
 import InjectionImpl
 #endif
 import Foundation
