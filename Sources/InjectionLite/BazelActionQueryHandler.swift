@@ -52,11 +52,6 @@ public enum BazelActionQueryError: Error, CustomStringConvertible {
     }
 }
 
-public enum TargetSelectionStrategy {
-    case first              // Select the first target found
-    case mostSpecific       // Select the most specific target (longest path)
-    case primaryTarget      // Select primary target based on heuristics
-}
 
 public class BazelActionQueryHandler {
     private let workspaceRoot: String
@@ -72,15 +67,11 @@ public class BazelActionQueryHandler {
     // MARK: - Public Interface
     
     /// Find compilation command for a given source file
-    public func findCompilationCommand(
-        for sourcePath: String,
-        strategy: TargetSelectionStrategy = .mostSpecific
-    ) throws -> String {
+    public func findCompilationCommand(for sourcePath: String) throws -> String {
         log("🔍 Finding compilation command for: \(sourcePath)")
         
         // Check cache first
-        let cacheKey = "\(sourcePath):\(strategy)"
-        if let cachedCommand = getCachedCommand(for: cacheKey) {
+        if let cachedCommand = getCachedCommand(for: sourcePath) {
             log("💾 Using cached compilation command")
             return cachedCommand
         }
@@ -91,8 +82,8 @@ public class BazelActionQueryHandler {
             throw BazelActionQueryError.noTargetsFound(sourcePath)
         }
         
-        // Sort targets by strategy preference for iteration
-        let sortedTargets = sortTargetsByStrategy(targets, for: sourcePath, strategy: strategy)
+        // Sort targets by specificity (longest path first)
+        let sortedTargets = targets.sorted { $0.count > $1.count }
         
         // Try each target until we find one that actually includes our source file in its inputs
         var lastError: BazelActionQueryError?
@@ -102,7 +93,7 @@ public class BazelActionQueryHandler {
                 let command = try getCompilationCommand(for: target, sourcePath: sourcePath)
                 
                 // Cache the successful result
-                setCachedCommand(command, for: cacheKey)
+                setCachedCommand(command, for: sourcePath)
                 
                 log("✅ Found compilation command for \(sourcePath) in target: \(target)")
                 return command
@@ -227,45 +218,6 @@ public class BazelActionQueryHandler {
     
     // MARK: - Private Implementation
     
-    private func sortTargetsByStrategy(
-        _ targets: [String],
-        for sourcePath: String,
-        strategy: TargetSelectionStrategy
-    ) -> [String] {
-        switch strategy {
-        case .first:
-            return targets
-            
-        case .mostSpecific:
-            // Sort by path length (most specific first)
-            return targets.sorted { $0.count > $1.count }
-            
-        case .primaryTarget:
-            var sortedTargets = targets
-            
-            // Use heuristics to find the primary target
-            // Prefer targets that end with the file name (without extension)
-            let fileName = (sourcePath as NSString).lastPathComponent
-            let baseName = (fileName as NSString).deletingPathExtension
-            
-            // Sort with primary target candidates first
-            sortedTargets.sort { target1, target2 in
-                let target1IsPrimary = target1.hasSuffix(":\(baseName)")
-                let target2IsPrimary = target2.hasSuffix(":\(baseName)")
-                
-                if target1IsPrimary && !target2IsPrimary {
-                    return true
-                } else if !target1IsPrimary && target2IsPrimary {
-                    return false
-                } else {
-                    // Both are primary or both are not, sort by specificity
-                    return target1.count > target2.count
-                }
-            }
-            
-            return sortedTargets
-        }
-    }
     
     private func getCompilationCommand(for target: String, sourcePath: String) throws -> String {
         log("⚙️ Getting compilation command for target: \(target)")

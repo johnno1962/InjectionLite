@@ -73,10 +73,7 @@ public class BazelAQueryParser: LiteParser {
     
     private func findCompilationCommandSync(for sourcePath: String, platformFilter: String) -> String? {
         do {
-            let command = try actionQueryHandler.findCompilationCommand(
-                for: sourcePath,
-                strategy: .mostSpecific
-            )
+            let command = try actionQueryHandler.findCompilationCommand(for: sourcePath)
             
             // Clean and prepare command for hot reloading execution
             let cleanedCommand = cleanBazelCommand(command)

@@ -177,10 +177,7 @@ public class BazelInterface {
             bazelExecutable: bazelExecutable
         )
         
-        let command = try queryHandler.findCompilationCommand(
-            for: sourcePath,
-            strategy: .mostSpecific
-        )
+        let command = try queryHandler.findCompilationCommand(for: sourcePath)
         
         log("🔧 Using compilation command: \(command)")
         
