@@ -6,7 +6,6 @@
 //
 
 import Foundation
-import FilenameMatcher
 
 /// Wrapper class for FilenameMatcher to use with NSCache
 private final class MatcherWrapper {
