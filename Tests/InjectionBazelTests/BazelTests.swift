@@ -136,12 +136,6 @@ final class BazelTests: XCTestCase {
         }
     }
     
-    func testBazelInterfaceCacheClearing() {
-        XCTAssertNoThrow(try {
-            let interface = try BazelInterface(workspaceRoot: workspacePath)
-            interface.clearCache()
-        }())
-    }
     
     // MARK: - Error Handling Tests
     

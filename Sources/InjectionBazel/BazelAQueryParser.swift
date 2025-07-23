@@ -263,22 +263,6 @@ public class BazelAQueryParser: LiteParser {
         BazelAQueryParser.commandCache.setObject(command as NSString, forKey: key as NSString)
     }
     
-    public func clearCache() {
-        BazelAQueryParser.commandCache.removeAllObjects()
-        
-        // Clear caches in components
-        actionQueryHandler.clearCache()
-        bazelInterface.clearCache()
-        
-        log("🗑️ BazelAQueryParser cache cleared")
-    }
-    
-    // MARK: - Validation
-    
-    public func validateWorkspace() throws {
-        try bazelInterface.validateWorkspace()
-        log("✅ Bazel workspace validation passed")
-    }
     
 }
 #endif
