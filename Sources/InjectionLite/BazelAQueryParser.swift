@@ -115,9 +115,18 @@ public class BazelAQueryParser: LiteParser {
             "-index-ignore-system-modules"
         ]
         
+        // Also remove -Xwrapped-swift flags which have a different pattern
+        let xWrappedSwiftPattern = "\\s+'-Xwrapped-swift=[^']*'"
+        
         for flag in flagsToRemove {
             // Remove flag and its argument (if it takes one)
             cleanedCommand = removeFlagAndArgument(from: cleanedCommand, flag: flag)
+        }
+        
+        // Remove -Xwrapped-swift flags with special handling
+        if let regex = try? NSRegularExpression(pattern: xWrappedSwiftPattern, options: [.dotMatchesLineSeparators]) {
+            let range = NSRange(cleanedCommand.startIndex..., in: cleanedCommand)
+            cleanedCommand = regex.stringByReplacingMatches(in: cleanedCommand, options: [], range: range, withTemplate: "")
         }
         
         // Extract SDK path and Developer directory for environment variables
@@ -165,21 +174,42 @@ public class BazelAQueryParser: LiteParser {
     // MARK: - Command Cleaning Helpers
     
     private func removeFlagAndArgument(from command: String, flag: String) -> String {
-        // Create regex to match flag and its argument (if any)
-        // Handles both "-flag value" and "-flag=value" formats
+        var result = command
+        let escapedFlag = NSRegularExpression.escapedPattern(for: flag)
+        
+        // Handle different flag patterns:
+        // 1. -Xfrontend -const-gather-protocols-file -Xfrontend /path/to/file
+        // 2. -emit-const-values-path /path/to/file  
+        // 3. -index-ignore-system-modules (standalone)
+        
         let patterns = [
-            "\\s+\(NSRegularExpression.escapedPattern(for: flag))\\s+\\S+", // -flag value
-            "\\s+\(NSRegularExpression.escapedPattern(for: flag))=\\S+",     // -flag=value
-            "\\s+\(NSRegularExpression.escapedPattern(for: flag))(?=\\s|$)"  // -flag alone
+            // Pattern 1: -Xfrontend -flag -Xfrontend argument
+            "\\s+-Xfrontend\\s+\(escapedFlag)\\s+-Xfrontend\\s+\\S+",
+            // Pattern 2: -flag argument (with potential line breaks and whitespace)
+            "\\s+\(escapedFlag)\\s+[^\\s-][^\\\\]*?(?=\\s+-|$)",
+            // Pattern 3: -flag alone
+            "\\s+\(escapedFlag)(?=\\s|$)",
+            // Pattern 4: -flag=value
+            "\\s+\(escapedFlag)=\\S+"
         ]
         
-        var result = command
         for pattern in patterns {
-            if let regex = try? NSRegularExpression(pattern: pattern) {
+            if let regex = try? NSRegularExpression(pattern: pattern, options: [.dotMatchesLineSeparators]) {
                 let range = NSRange(result.startIndex..., in: result)
-                result = regex.stringByReplacingMatches(in: result, options: [], range: range, withTemplate: "")
+                let matches = regex.matches(in: result, options: [], range: range)
+                
+                // Process matches in reverse order to maintain indices
+                for match in matches.reversed() {
+                    if let range = Range(match.range, in: result) {
+                        result.replaceSubrange(range, with: "")
+                    }
+                }
             }
         }
+        
+        // Clean up extra whitespace and line breaks
+        result = result.replacingOccurrences(of: "\\s+", with: " ", options: .regularExpression)
+        result = result.trimmingCharacters(in: .whitespacesAndNewlines)
         
         return result
     }

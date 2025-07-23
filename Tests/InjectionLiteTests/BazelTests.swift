@@ -256,14 +256,21 @@ final class BazelTests: XCTestCase {
         XCTAssertNoThrow(try {
             let parser = try BazelAQueryParser(workspaceRoot: workspacePath)
             
-            // Mock command with flags that should be removed
+            // Mock command with flags that should be removed (matching real Bazel output)
             let originalCommand = """
                 /usr/bin/swiftc -module-name TestModule \
-                -const-gather-protocols-file /tmp/protocols.json \
-                -emit-const-values-path /tmp/const-values \
-                -emit-module-path /tmp/module.swiftmodule \
-                -index-store-path /tmp/index-store \
+                -Xfrontend \
+                -const-gather-protocols-file \
+                -Xfrontend \
+                /tmp/const_protocols_to_gather.json \
+                -emit-const-values-path \
+                bazel-out/ios_sim_arm64-dbg/bin/TestModule.swiftconstvalues \
+                -emit-module-path \
+                bazel-out/ios_sim_arm64-dbg/bin/TestModule.swiftmodule \
+                -index-store-path \
+                bazel-out/ios_sim_arm64-dbg/bin/TestModule.indexstore \
                 -index-ignore-system-modules \
+                '-Xwrapped-swift=-global-index-store-import-path=bazel-out/_global_index_store' \
                 -isysroot /Applications/Xcode.app/Contents/Developer/Platforms/iPhoneSimulator.platform/Developer/SDKs/iPhoneSimulator18.1.sdk \
                 -o output.o input.swift
                 """
@@ -273,11 +280,13 @@ final class BazelTests: XCTestCase {
             // The command should be cleaned when processed
             
             // Verify the original command contains the flags to be removed
+            XCTAssertTrue(originalCommand.contains("-Xfrontend"))
             XCTAssertTrue(originalCommand.contains("-const-gather-protocols-file"))
             XCTAssertTrue(originalCommand.contains("-emit-const-values-path"))
             XCTAssertTrue(originalCommand.contains("-emit-module-path"))
             XCTAssertTrue(originalCommand.contains("-index-store-path"))
             XCTAssertTrue(originalCommand.contains("-index-ignore-system-modules"))
+            XCTAssertTrue(originalCommand.contains("-Xwrapped-swift"))
             XCTAssertTrue(originalCommand.contains("-isysroot"))
         }())
     }
