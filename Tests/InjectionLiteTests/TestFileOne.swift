@@ -2,7 +2,7 @@
 import Foundation
 
 func topLevelValue() -> String {
-    return "VALUE3096"
+    return "VALUE760"
 }
 
 struct TestStruct {
@@ -10,10 +10,10 @@ struct TestStruct {
     let c2 = GenericSuper(t: 88.5)
     let c3 = GenericSuper(t: "__")
     static func staticValue() -> String {
-        return "VALUE3096"
+        return "VALUE760"
     }
     func value() -> String {
-        return "VALUE3096"
+        return "VALUE760"
     }
 }
 
@@ -22,13 +22,13 @@ class TestSuper<T> {
         return #filePath
     }
     static func staticBaseValue() -> String {
-        return "VALUE3096"
+        return "VALUE760"
     }
     class func classBaseValue() -> String {
-        return "VALUE3096"
+        return "VALUE760"
     }
     func baseValue() -> String {
-        return "VALUE3096"
+        return "VALUE760"
     }
 }
 
@@ -38,16 +38,16 @@ class GenericSuper<T>: TestSuper<T> {
         self.t = t
     }
     static func staticValue() -> String {
-        return "VALUE3096"
+        return "VALUE760"
     }
     class func classSuperValue() -> String {
-        return "VALUE3096"
+        return "VALUE760"
     }
     func superValue() -> String {
-        return "VALUE3096"
+        return "VALUE760"
     }
 
     @objc func injected() {
-        InjectionLiteTests.checks.remove("VALUE3096-\(t)")
+        InjectionLiteTests.checks.remove("VALUE760-\(t)")
     }
 }

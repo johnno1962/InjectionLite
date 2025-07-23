@@ -6,10 +6,10 @@ class TestSubClass: GenericSuper<Int> {
         return #filePath
     }
     class func classValue() -> String {
-        return "VALUE30960"
+        return "VALUE7600"
     }
     func value() -> String {
-        return "VALUE30960"
+        return "VALUE7600"
     }
 }
 
