@@ -18,10 +18,10 @@ private final class MatcherWrapper {
 
 /// Parses .gitignore files and provides pattern matching functionality
 public final class GitIgnoreParser {
-    static private var gitIgnoreParsers: [GitIgnoreParser] = []
-    static private let ignoreCache = NSCache<NSString, NSNumber>()
-    private var patterns: [GitIgnorePattern] = []
     private static let matcherCache = NSCache<NSString, MatcherWrapper>()
+    private static let ignoreCache = NSCache<NSString, NSNumber>()
+    private static var gitIgnoreParsers: [GitIgnoreParser] = []
+    private var patterns: [GitIgnorePattern] = []
     
     struct GitIgnorePattern {
         let pattern: String
@@ -193,9 +193,11 @@ public final class GitIgnoreParser {
         
         return shouldIgnore ? "gitignore rule" : nil
     }
-    
+
+    public static var  validExtensions = Set([
+        ".swift", ".m", ".mm", ".h", ".c", ".cpp", ".cc"])
+
     private static func isValidSourceFile(_ filePath: String) -> Bool {
-        let validExtensions = Set([".swift", ".m", ".mm", ".h", ".c", ".cpp", ".cc"])
         let pathExtension = (filePath as NSString).pathExtension.lowercased()
         guard !pathExtension.isEmpty else {
             return false
