@@ -33,6 +33,8 @@ extension String {
 
 
 public struct Recompiler {
+    
+    static var packageFrameworks: String?
 
     /// A cache is kept of compiltaion commands in /tmp as Xcode housekeeps logs.
     lazy var longTermCache = NSMutableDictionary(contentsOfFile:
@@ -141,6 +143,10 @@ public struct Recompiler {
             return nil
         }
 
+        if let frameworksArg: String = command[
+            " -F (\(Self.argumentRegex)/PackageFrameworks) "] {
+            Self.packageFrameworks = frameworksArg[#"\\(.)"#, "$1"]
+        }
         if longTermCache[cacheKey] as? String != command {
             longTermCache[cacheKey] = command
             writeToCache()
