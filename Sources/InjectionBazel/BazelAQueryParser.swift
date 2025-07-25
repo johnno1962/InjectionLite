@@ -20,6 +20,7 @@ import Popen
 public protocol LiteParser {
   func command(for source: String, platformFilter: String,
                found: inout (logDir: String, scanner: Popen?)?) -> String?
+  func prepareFinalCommand(command: String, source: String, objectFile: String, tmpdir: String, injectionNumber: Int) -> String
 }
 
 public class BazelAQueryParser: LiteParser {
@@ -31,7 +32,10 @@ public class BazelAQueryParser: LiteParser {
     // Cache for compilation commands using NSCache for thread-safety and memory management
     private static let commandCache = NSCache<NSString, NSString>()
     
-    public init(workspaceRoot: String, bazelExecutable: String = "bazel") throws {
+    // App target detection for optimized queries
+    private var detectedAppTarget: String?
+    
+    public init(workspaceRoot: String, bazelExecutable: String = "/opt/homebrew/bin/bazelisk") throws {
         self.workspaceRoot = workspaceRoot
         self.bazelExecutable = bazelExecutable
         
@@ -49,14 +53,33 @@ public class BazelAQueryParser: LiteParser {
         log("✅ BazelAQueryParser initialized for workspace: \(workspaceRoot)")
     }
     
+    // MARK: - App Target Management
+    
+    /// Auto-discover and cache the app target for optimized compilation queries
+    public func autoDiscoverAppTarget(for sourcePath: String) {
+        do {
+            detectedAppTarget = try actionQueryHandler.discoverAppTarget(for: sourcePath)
+            log("✅ App target auto-discovered and cached: \(detectedAppTarget!)")
+        } catch {
+            log("⚠️ Failed to auto-discover app target for \(sourcePath): \(error)")
+            detectedAppTarget = nil
+        }
+    }
+    
+    /// Get the currently detected app target
+    public func getAppTarget() -> String? {
+        return detectedAppTarget
+    }
+    
     // MARK: - LiteParser Implementation
     
     public func command(for source: String, platformFilter: String,
                        found: inout (logDir: String, scanner: Popen?)?) -> String? {
         log("🔍 BazelAQueryParser: Getting command for \(source)")
         
-        // Check cache first
-        let cacheKey = "\(source):\(platformFilter)"
+        // Check cache first - include app target in cache key for session-based caching
+        let appTargetKey = detectedAppTarget ?? "no-target"
+        let cacheKey = "\(source):\(platformFilter):\(appTargetKey)"
         if let cachedCommand = getCachedCommand(for: cacheKey) {
             log("💾 Using cached Bazel command for \(source)")
             return cachedCommand
@@ -76,11 +99,51 @@ public class BazelAQueryParser: LiteParser {
         return command
     }
     
+    public func prepareFinalCommand(command: String, source: String, objectFile: String, tmpdir: String, injectionNumber: Int) -> String {
+        // Replace bazel-out with workspace-absolute paths
+        let commandWithAbsolutePaths = makeBazelOutPathsAbsolute(in: command)
+        
+        // Handle Bazel's output-file-map if present
+        let outputFileMapRegex = #" -output-file-map ([^\s\\]*(?:\\.[^\s\\]*)*)"#
+        if let outputFileMapPath = (commandWithAbsolutePaths[outputFileMapRegex] as String?)?.unescape {
+            return createMinimalOutputFileMapCommand(command: commandWithAbsolutePaths, source: source, objectFile: objectFile, outputFileMapPath: outputFileMapPath, tmpdir: tmpdir, injectionNumber: injectionNumber)
+        } else {
+            // Fallback to traditional -o flag
+            return commandWithAbsolutePaths + " -o \(objectFile)"
+        }
+    }
+    
+    /// Replace bazel-out paths with absolute paths from workspace root
+    private func makeBazelOutPathsAbsolute(in command: String) -> String {
+        let workspaceAbsolutePath = workspaceRoot + "/bazel-out"
+        let updatedCommand = command.replacingOccurrences(of: "bazel-out", with: workspaceAbsolutePath)
+        
+        if updatedCommand != command {
+            log("🔗 Replaced bazel-out paths with absolute paths from workspace root")
+        }
+        
+        return updatedCommand
+    }
+    
     // MARK: - Private Implementation
     
     private func findCompilationCommandSync(for sourcePath: String, platformFilter: String) -> String? {
         do {
-            let command = try actionQueryHandler.findCompilationCommand(for: sourcePath)
+            // Auto-discover app target on first use if not already cached
+            if detectedAppTarget == nil {
+                log("🔍 Auto-discovering app target for first source file: \(sourcePath)")
+                autoDiscoverAppTarget(for: sourcePath)
+            }
+            
+            // Use the auto-discovery logic in findCompilationCommand
+            // This will use cached app target if available, or auto-discover it
+            let command = try actionQueryHandler.findCompilationCommand(for: sourcePath, appTarget: detectedAppTarget)
+            
+            // Update our cached app target if one was discovered
+            if detectedAppTarget == nil, let cachedTarget = actionQueryHandler.currentAppTarget {
+                detectedAppTarget = cachedTarget
+                log("📱 Updated cached app target from discovery: \(cachedTarget)")
+            }
             
             // Clean and prepare command for hot reloading execution
             let cleanedCommand = cleanBazelCommand(command)
@@ -107,7 +170,8 @@ public class BazelAQueryParser: LiteParser {
             "-emit-const-values-path", 
             "-emit-module-path",
             "-index-store-path",
-            "-index-ignore-system-modules"
+            "-index-ignore-system-modules",
+            "-module-cache-path"
         ]
         
         // Also remove -Xwrapped-swift flags which have a different pattern
@@ -124,24 +188,14 @@ public class BazelAQueryParser: LiteParser {
             cleanedCommand = regex.stringByReplacingMatches(in: cleanedCommand, options: [], range: range, withTemplate: "")
         }
         
-        // Extract SDK path and Developer directory for environment variables
-        let sdkPath = extractSDKPath(from: cleanedCommand)
-        let developerDir = extractDeveloperDir(from: cleanedCommand)
+        // Replace Bazel placeholders in the command with actual values
+        var finalCommand = replaceBazelPlaceholders(in: cleanedCommand)
         
-        // Prepend environment variable exports
-        var envVars: [String] = []
-        if let sdkPath = sdkPath {
-            envVars.append("export SDKROOT=\"\(sdkPath)\"")
+        // Detect and override whole module optimization for hot reloading
+        if finalCommand.contains("-whole-module-optimization") || finalCommand.contains("-wmo") {
+            finalCommand += " -no-whole-module-optimization"
+            log("🔧 Added -no-whole-module-optimization to override WMO for hot reloading")
         }
-        if let developerDir = developerDir {
-            envVars.append("export DEVELOPER_DIR=\"\(developerDir)\"")
-        }
-        
-        // Prepend cd to workspace directory
-        let workspaceCommand = "cd \"\(workspaceRoot)\""
-        
-        // Combine all parts
-        let finalCommand = ([workspaceCommand] + envVars + [cleanedCommand]).joined(separator: " && ")
         
         log("✅ Cleaned Bazel command ready for execution")
         return finalCommand
@@ -164,6 +218,74 @@ public class BazelAQueryParser: LiteParser {
         
         log("🎯 Applied platform filter '\(filter)' to Bazel command")
         return filteredCommand
+    }
+    
+    /// Replace Bazel placeholders in the command with actual values
+    private func replaceBazelPlaceholders(in command: String) -> String {
+        var result = command
+        
+        // Replace __BAZEL_XCODE_SDKROOT__ with actual SDK path
+        if result.contains("__BAZEL_XCODE_SDKROOT__") {
+            // Use xcrun to get the simulator SDK path (preferred for development)
+            if let output = Popen.task(exec: "/usr/bin/xcrun", 
+                                      arguments: ["--sdk", "iphonesimulator", "--show-sdk-path"],
+                                      cd: workspaceRoot) {
+                let sdkPath = output.trimmingCharacters(in: .whitespacesAndNewlines)
+                if !sdkPath.isEmpty && !sdkPath.contains("error") {
+                    result = result.replacingOccurrences(of: "__BAZEL_XCODE_SDKROOT__", with: sdkPath)
+                    log("✅ Replaced __BAZEL_XCODE_SDKROOT__ with \(sdkPath)")
+                }
+            }
+        }
+        
+        // Replace __BAZEL_XCODE_DEVELOPER_DIR__ with actual developer directory  
+        if result.contains("__BAZEL_XCODE_DEVELOPER_DIR__") {
+            let developerDir = "/Applications/Xcode.app/Contents/Developer"
+            result = result.replacingOccurrences(of: "__BAZEL_XCODE_DEVELOPER_DIR__", with: developerDir)
+            log("✅ Replaced __BAZEL_XCODE_DEVELOPER_DIR__ with \(developerDir)")
+        }
+        
+        return result
+    }
+    
+    /// Create a minimal output-file-map for single source file compilation
+    private func createMinimalOutputFileMapCommand(command: String, source: String, objectFile: String, outputFileMapPath: String, tmpdir: String, injectionNumber: Int) -> String {
+        do {
+            log("🗂️ Creating minimal output-file-map for single source compilation")
+            
+            // Convert absolute source path to relative path from workspace root
+            let relativePath: String
+            if source.hasPrefix(workspaceRoot) {
+                relativePath = String(source.dropFirst(workspaceRoot.count))
+                    .trimmingCharacters(in: CharacterSet(charactersIn: "/"))
+            } else {
+                // If already relative, use as-is
+                relativePath = source
+            }
+            
+            // Create minimal output-file-map JSON with only the source file mapping
+            let minimalMap: [String: Any] = [
+                relativePath: [
+                    "object": objectFile
+                ]
+            ]
+            
+            // Write the minimal map to a temporary file with unescaped forward slashes
+            let tempMapPath = tmpdir + "eval\(injectionNumber)_output_map.json"
+            let mapData = try JSONSerialization.data(withJSONObject: minimalMap, options: [.prettyPrinted, .sortedKeys, .withoutEscapingSlashes])
+            try mapData.write(to: URL(fileURLWithPath: tempMapPath))
+            
+            // Replace the output-file-map path in the command
+            let modifiedCommand = command.replacingOccurrences(of: outputFileMapPath, with: tempMapPath)
+            
+            log("✅ Created minimal output-file-map: \(tempMapPath)")
+            log("📁 Mapping: \(relativePath) -> \(objectFile)")
+            return modifiedCommand
+            
+        } catch {
+            log("⚠️ Error creating minimal output-file-map: \(error), falling back to -o flag")
+            return command + " -o \(objectFile)"
+        }
     }
     
     // MARK: - Command Cleaning Helpers
