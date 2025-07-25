@@ -68,8 +68,7 @@ public struct Recompiler {
         let parser = parser(forProjectContaining: source)
         var scanned: (logDir: String, scanner: Popen?)?
         let cacheKey = source+platformFilter
-        guard var command = longTermCache[cacheKey] as? String ??
-                parser.command(for: source, platformFilter:
+        guard var command = parser.command(for: source, platformFilter:
                                 platformFilter, found: &scanned) else {
             log("""
                 ⚠️ Could not locate command for \(source). \
@@ -109,9 +108,14 @@ public struct Recompiler {
         Reloader.injectionNumber += 1
         let objectFile = tmpbase + ".o"
         unlink(objectFile)
-        let benchmark = source.hasSuffix(".swift") ? Reloader.typeCheckLimit : ""
-        while let errors = Popen.system(command+" -o \(objectFile) " +
-                                        benchmark, errors: nil) {
+        let finalCommand = parser.prepareFinalCommand(
+            command: command,
+            source: source,
+            objectFile: objectFile,
+            tmpdir: tmpdir,
+            injectionNumber: Reloader.injectionNumber
+        )
+        while let errors = Popen.system(finalCommand, errors: nil) {
             for slow: String in errors[Reloader.typeCheckRegex] {
                 log(slow)
             }
@@ -136,7 +140,7 @@ public struct Recompiler {
                 return recompile(source: source, platformFilter:
                                     platformFilter, dylink: dylink)
             }
-            log("Processing command: "+command+" -o \(objectFile)\n")
+            log("Processing command: "+finalCommand+"\n")
             log("Current log: \(FileWatcher.derivedLog ?? "no log")")
             log("⚠️ Compiler output:\n"+errors)
             log("⚠️ Recompilation failed")
