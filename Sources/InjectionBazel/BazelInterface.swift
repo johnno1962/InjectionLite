@@ -121,9 +121,9 @@ public class BazelInterface {
             .trimmingCharacters(in: CharacterSet(charactersIn: "/"))
         
         // Query for targets that include this source file
-        let queryCommand = "\(bazelExecutable) query 'attr(srcs, \(relativePath), //...)'"
-        
-        guard let result = Popen(cmd: queryCommand)?.readAll() else {
+        guard let result = Popen.task(exec: bazelExecutable, 
+                                    arguments: ["query", "attr(srcs, \(relativePath), //...)"],
+                                    cd: workspaceRoot) else {
             throw BazelError.queryFailed("Failed to execute query for \(relativePath)")
         }
         
@@ -145,23 +145,23 @@ public class BazelInterface {
     public func buildForHotReload(target: String, bepOutput: String? = nil) async throws {
         log("🔨 Building target for hot reload: \(target)")
         
-        var buildCommand = "\(bazelExecutable) build \(target)"
+        var arguments = ["build", target]
         
         // Add build event protocol output if specified
         if let bepOutput = bepOutput {
-            buildCommand += " --build_event_json_file=\(bepOutput)"
+            arguments.append("--build_event_json_file=\(bepOutput)")
         }
         
         // Add flags for hot reloading compatibility
-        buildCommand += " --linkopt=-Wl,interposable"
-        buildCommand += " --swiftcopt=-enable-library-evolution"
-        buildCommand += " --compilation_mode=dbg"
+        arguments.append("--linkopt=-Wl,interposable")
+        arguments.append("--swiftcopt=-enable-library-evolution")
+        arguments.append("--compilation_mode=dbg")
         
-        guard let result = Popen(cmd: buildCommand) else {
+        guard let output = Popen.task(exec: bazelExecutable,
+                                     arguments: arguments,
+                                     cd: workspaceRoot) else {
             throw BazelError.buildFailed("Failed to execute build command")
         }
-        
-        let output = result.readAll()
         if output.contains("ERROR:") || output.contains("FAILED:") {
             throw BazelError.buildFailed(output)
         }
@@ -223,13 +223,14 @@ public class BazelInterface {
     }
     
     private func getBazelInfo(_ key: String) -> String? {
-        let command = "\(bazelExecutable) info \(key)"
-        guard let result = Popen(cmd: command) else {
+        guard let output = Popen.task(exec: bazelExecutable,
+                                     arguments: ["info", key],
+                                     cd: workspaceRoot) else {
             return nil
         }
         
-        let output = result.readAll().trimmingCharacters(in: CharacterSet.whitespacesAndNewlines)
-        return output.contains("ERROR:") ? nil : output
+        let trimmedOutput = output.trimmingCharacters(in: CharacterSet.whitespacesAndNewlines)
+        return trimmedOutput.contains("ERROR:") ? nil : trimmedOutput
     }
     
     // MARK: - Cache Management
@@ -240,11 +241,6 @@ public class BazelInterface {
     
     private func setCachedTarget(_ target: String, for sourcePath: String) {
         BazelInterface.sourceToTargetCache.setObject(target as NSString, forKey: sourcePath as NSString)
-    }
-    
-    public func clearCache() {
-        BazelInterface.sourceToTargetCache.removeAllObjects()
-        log("🗑️ Bazel target cache cleared")
     }
 }
 #endif
