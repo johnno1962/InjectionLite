@@ -154,11 +154,6 @@ public final class GitIgnoreParser {
         
         return parsers
     }
-    
-    /// Clear the matcher cache (useful for memory management)
-    static func clearCache() {
-        matcherCache.removeAllObjects()
-    }
 
     public static func monitor(directory: String) {
         let parsers = GitIgnoreParser.findGitIgnoreFiles(startingFrom: directory)
