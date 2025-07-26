@@ -171,7 +171,8 @@ public class BazelAQueryParser: LiteParser {
             "-emit-module-path",
             "-index-store-path",
             "-index-ignore-system-modules",
-            "-module-cache-path"
+            "-module-cache-path",
+            "-num-threads"
         ]
         
         // Also remove -Xwrapped-swift flags which have a different pattern
@@ -193,7 +194,11 @@ public class BazelAQueryParser: LiteParser {
         
         // Detect and override whole module optimization for hot reloading
         if finalCommand.contains("-whole-module-optimization") || finalCommand.contains("-wmo") {
+            finalCommand = finalCommand.replacingOccurrences(
+                of: " -whole-module-optimization", with: ""
+            )
             finalCommand += " -no-whole-module-optimization"
+            finalCommand += " -enable-batch-mode"
             log("🔧 Added -no-whole-module-optimization to override WMO for hot reloading")
         }
         
