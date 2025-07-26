@@ -68,7 +68,8 @@ public struct Recompiler {
         let parser = parser(forProjectContaining: source)
         var scanned: (logDir: String, scanner: Popen?)?
         let cacheKey = source+platformFilter
-        guard var command = parser.command(for: source, platformFilter:
+        guard var command = longTermCache[cacheKey] as? String ??
+                parser.command(for: source, platformFilter:
                                 platformFilter, found: &scanned) else {
             log("""
                 ⚠️ Could not locate command for \(source). \
