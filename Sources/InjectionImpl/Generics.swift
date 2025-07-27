@@ -10,6 +10,7 @@
 
 #if DEBUG || !SWIFT_PACKAGE
 import Foundation
+import os.lock
 #if canImport(DLKitD)
 import fishhookD
 import DLKitD
@@ -22,7 +23,20 @@ private struct TrackingGenerics {
     static let allocFuncName = "swift_allocateGenericClassMetadata"
     static var save_allocateGeneric: GenericAllocFunc!
 
-    static var registry = [String: [AnyClass]]()
+    private static var registryLock = os_unfair_lock()
+    private static var _registry = [String: [AnyClass]]()
+    
+    static func addToRegistry(baseName: String, newClass: AnyClass) {
+        os_unfair_lock_lock(&registryLock)
+        defer { os_unfair_lock_unlock(&registryLock) }
+        _registry[baseName, default: []].append(newClass)
+    }
+    
+    static func getClasses(for baseName: String) -> [AnyClass] {
+        os_unfair_lock_lock(&registryLock)
+        defer { os_unfair_lock_unlock(&registryLock) }
+        return _registry[baseName] ?? []
+    }
 }
 
 @_cdecl("injection_hookGenerics")
@@ -47,7 +61,7 @@ public func injection_allocateGeneric(description: UnsafeMutableRawPointer,
     let fullName = _typeName(newClass)
     if let params = fullName.firstIndex(of: "<") {
         let baseName = String(fullName.prefix(upTo: params))
-        TrackingGenerics.registry[baseName, default: []].append(newClass)
+        TrackingGenerics.addToRegistry(baseName: baseName, newClass: newClass)
     }
     return newClass
 }
@@ -57,7 +71,7 @@ extension Sweeper {
     func hookedPatch(of generics: Set<String>, in image: ImageSymbols) -> [AnyClass] {
         var patched = Set<UnsafeRawPointer>()
         for baseName in generics {
-            for special in TrackingGenerics.registry[baseName] ?? [] {
+            for special in TrackingGenerics.getClasses(for: baseName) {
                 _ = patchGenerics(oldClass: special, image: image,
                                   injectedGenerics: generics, patched: &patched)
             }
@@ -74,7 +88,7 @@ extension SwiftInjection {
     static func hookedPatch(of generics: Set<String>, tmpfile: String) -> [AnyClass] {
         var patched = Set<UnsafeRawPointer>()
         for baseName in generics {
-            for special in TrackingGenerics.registry[baseName] ?? [] {
+            for special in TrackingGenerics.getClasses(for: baseName) {
                 _ = patchGenerics(oldClass: special, tmpfile: tmpfile,
                                   injectedGenerics: generics, patched: &patched)
             }
