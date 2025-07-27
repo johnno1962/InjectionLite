@@ -133,7 +133,7 @@ public struct Recompiler {
                     String(cString: strerror(errno)))
             }
 
-            if !errors.contains(" error: ") { break }
+            if !errors.contains("error: ") { break }
             let wasCached = longTermCache[cacheKey] != nil
             longTermCache[cacheKey] = nil
             writeToCache()
