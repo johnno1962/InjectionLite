@@ -57,10 +57,5 @@ let package = Package(
             name: "InjectionLiteTests",
             dependencies: ["InjectionLite"],
             linkerSettings: [.unsafeFlags([
-                "-Xlinker", "-interposable"])]),
-        .testTarget(
-            name: "InjectionBazelTests",
-            dependencies: ["InjectionBazel"],
-            linkerSettings: [.unsafeFlags([
                 "-Xlinker", "-interposable"])])]
 )
