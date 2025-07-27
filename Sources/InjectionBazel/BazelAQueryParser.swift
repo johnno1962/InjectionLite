@@ -17,6 +17,12 @@ import PopenD
 import Popen
 #endif
 
+extension String {
+    public var unescape: String {
+        return self[#"\\(.)"#, "$1"]
+    }
+}
+
 public protocol LiteParser {
   func command(for source: String, platformFilter: String,
                found: inout (logDir: String, scanner: Popen?)?) -> String?

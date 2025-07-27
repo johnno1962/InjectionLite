@@ -25,13 +25,6 @@ import PopenD
 import Popen
 #endif
 
-extension String {
-    var unescape: String {
-        return self[#"\\(.)"#, "$1"]
-    }
-}
-
-
 public struct Recompiler {
     
     static var packageFrameworks: String?
