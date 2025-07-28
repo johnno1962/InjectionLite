@@ -16,6 +16,19 @@ import PopenD
 import Popen
 #endif
 
+#if !os(macOS)
+extension Popen {
+  class func task(exec: String, arguments: [String] = [],
+                  cd: String = "/tmp", errors: Bool? = false) -> String? {
+      var cmd = "cd \(cd) && \(exec)"
+      for arg in arguments {
+          cmd += " '\(arg)'"
+      }
+      return system(cmd, errors: errors)
+  }
+}
+#endif
+
 /// Wrapper class for target arrays to use with NSCache
 private final class TargetArrayWrapper {
     let targets: [String]
