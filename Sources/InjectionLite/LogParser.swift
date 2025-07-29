@@ -145,9 +145,7 @@ struct LogParser: LiteParser {
     }
     
     func prepareFinalCommand(command: String, source: String, objectFile: String, tmpdir: String, injectionNumber: Int) -> String {
-        // Traditional Xcode approach - just add -o flag
-        let benchmark = source.hasSuffix(".swift") ? Reloader.typeCheckLimit : ""
-        return command + " -o \(objectFile) " + benchmark
+        command + " -o \(objectFile)"
     }
 }
 #endif

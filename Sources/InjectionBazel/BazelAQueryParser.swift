@@ -87,50 +87,93 @@ public class BazelAQueryParser: LiteParser {
         let appTargetKey = detectedAppTarget ?? "no-target"
         let cacheKey = "\(source):\(platformFilter):\(appTargetKey)"
         if let cachedCommand = getCachedCommand(for: cacheKey) {
-            log("💾 Using cached Bazel command for \(source)")
+            log("💾 Using cached optimized Bazel command for \(source)")
             return cachedCommand
         }
         
         // Use synchronous wrapper for async operations to conform to LiteParser protocol
-        let command = findCompilationCommandSync(for: source, platformFilter: platformFilter)
-        
-        if let command = command {
-            // Cache the successful result
-            setCachedCommand(command, for: cacheKey)
-            log("✅ Found Bazel compilation command for \(source)")
-        } else {
+        guard let rawCommand = findCompilationCommandSync(for: source, platformFilter: platformFilter) else {
             log("❌ No Bazel compilation command found for \(source)")
+            return nil
         }
         
-        return command
+        // Apply frontend optimizations early (cacheable transformations)
+        let optimizedCommand = applyFrontendOptimizations(to: rawCommand, primaryFile: source)
+        
+        // Cache the optimized result
+        setCachedCommand(optimizedCommand, for: cacheKey)
+        log("✅ Found and optimized Bazel compilation command for \(source)")
+        
+        return optimizedCommand
     }
     
     public func prepareFinalCommand(command: String, source: String, objectFile: String, tmpdir: String, injectionNumber: Int) -> String {
-        // Replace bazel-out with workspace-absolute paths
-        let commandWithAbsolutePaths = makeBazelOutPathsAbsolute(in: command)
+        // Check if this is a frontend command (already optimized)
+        if command.contains("swiftc -frontend") {
+            // Frontend commands should use -o flag, not output-file-map
+            log("🎯 Using -o flag for frontend command")
+            return command + " -o \(objectFile)"
+        }
         
-        // Handle Bazel's output-file-map if present
+        // For non-frontend commands, try output-file-map first
         let outputFileMapRegex = #" -output-file-map ([^\s\\]*(?:\\.[^\s\\]*)*)"#
-        if let outputFileMapPath = (commandWithAbsolutePaths[outputFileMapRegex] as String?)?.unescape {
-            return createMinimalOutputFileMapCommand(command: commandWithAbsolutePaths, source: source, objectFile: objectFile, outputFileMapPath: outputFileMapPath, tmpdir: tmpdir, injectionNumber: injectionNumber)
+        if let outputFileMapPath = (command[outputFileMapRegex] as String?)?.unescape {
+            return createMinimalOutputFileMapCommand(command: command, source: source, objectFile: objectFile, outputFileMapPath: outputFileMapPath, tmpdir: tmpdir, injectionNumber: injectionNumber)
         } else {
-            // Fallback to traditional -o flag
-            return commandWithAbsolutePaths + " -o \(objectFile)"
+            // Traditional -o flag fallback
+            return command + " -o \(objectFile)"
         }
     }
     
-    /// Replace bazel-out paths with absolute paths from workspace root
-    private func makeBazelOutPathsAbsolute(in command: String) -> String {
-        let workspaceAbsolutePath = workspaceRoot + "/bazel-out"
-        let updatedCommand = command.replacingOccurrences(of: "bazel-out", with: workspaceAbsolutePath)
+    // MARK: - Frontend Optimization (Cacheable)
+    
+    /// Apply frontend optimizations that can be cached and reused
+    /// This includes path normalization, frontend transformation, and command cleaning
+    private func applyFrontendOptimizations(to command: String, primaryFile: String) -> String {
+        log("⚡ Applying frontend optimizations to command")
         
-        if updatedCommand != command {
-            log("🔗 Replaced bazel-out paths with absolute paths from workspace root")
-        }
+        // Step 1: Try to optimize with Swift frontend mode for single-file compilation
+        let frontendCommand = transformToFrontendMode(command: command, primaryFile: primaryFile) ?? command
         
-        return updatedCommand
+        // Step 2: Clean frontend command - remove -Xfrontend flags and output-file-map
+        let cleanedFrontendCommand = cleanFrontendCommand(frontendCommand)
+        
+        return cleanedFrontendCommand
     }
     
+    /// Clean frontend command by removing -Xfrontend flags and output-file-map
+    /// Since we're already in frontend mode, -Xfrontend is redundant
+    private func cleanFrontendCommand(_ command: String) -> String {
+        log("🧹 Cleaning frontend command")
+        
+        var cleanedCommand = command
+        
+        // Remove -Xfrontend flags since we're already in frontend mode
+        // Pattern: -Xfrontend <flag> -> <flag>
+        let xfrontendPattern = #" -Xfrontend ([^-\s]\S*)"#
+        if let regex = try? NSRegularExpression(pattern: xfrontendPattern, options: []) {
+            let range = NSRange(cleanedCommand.startIndex..., in: cleanedCommand)
+            cleanedCommand = regex.stringByReplacingMatches(in: cleanedCommand, options: [], range: range, withTemplate: " $1")
+        }
+        
+        // Remove standalone -Xfrontend flags that might be left over
+        cleanedCommand = cleanedCommand.replacingOccurrences(of: " -Xfrontend ", with: " ")
+        
+        // Remove output-file-map since frontend mode will use -o instead
+        let outputFileMapRegex = #" -output-file-map ([^\s\\]*(?:\\.[^\s\\]*)*)"#
+        if let regex = try? NSRegularExpression(pattern: outputFileMapRegex, options: []) {
+            let range = NSRange(cleanedCommand.startIndex..., in: cleanedCommand)
+            cleanedCommand = regex.stringByReplacingMatches(in: cleanedCommand, options: [], range: range, withTemplate: "")
+        }
+        
+        // Clean up extra whitespace
+        cleanedCommand = cleanedCommand.replacingOccurrences(of: "\\s+", with: " ", options: .regularExpression)
+        cleanedCommand = cleanedCommand.trimmingCharacters(in: .whitespacesAndNewlines)
+        
+        log("✅ Frontend command cleaned")
+        return cleanedCommand
+    }
+
     // MARK: - Private Implementation
     
     private func findCompilationCommandSync(for sourcePath: String, platformFilter: String) -> String? {
@@ -196,17 +239,7 @@ public class BazelAQueryParser: LiteParser {
         }
         
         // Replace Bazel placeholders in the command with actual values
-        var finalCommand = replaceBazelPlaceholders(in: cleanedCommand)
-        
-        // Detect and override whole module optimization for hot reloading
-        if finalCommand.contains("-whole-module-optimization") || finalCommand.contains("-wmo") {
-            finalCommand = finalCommand.replacingOccurrences(
-                of: " -whole-module-optimization", with: ""
-            )
-            finalCommand += " -no-whole-module-optimization"
-            finalCommand += " -enable-batch-mode"
-            log("🔧 Added -no-whole-module-optimization to override WMO for hot reloading")
-        }
+        let finalCommand = replaceBazelPlaceholders(in: cleanedCommand)
         
         log("✅ Cleaned Bazel command ready for execution")
         return finalCommand
@@ -393,6 +426,233 @@ public class BazelAQueryParser: LiteParser {
     
     private func setCachedCommand(_ command: String, for key: String) {
         BazelAQueryParser.commandCache.setObject(command as NSString, forKey: key as NSString)
+    }
+    
+    // MARK: - Swift Frontend Optimization
+    
+    /// Extract Swift source files from a Bazel compilation command
+    /// Returns tuple of (all swift files, swift files without the changed file)
+    private func extractSwiftSourceFiles(from command: String, changedFile: String) -> (allFiles: [String], otherFiles: [String]) {
+        var swiftFiles: [String] = []
+        
+        // Split command into components, handling quoted arguments
+        let components = parseCommandComponents(command)
+        
+        // Find Swift files (ending with .swift) but ignore flags starting with dash
+        for component in components {
+            let cleanPath = component.trimmingCharacters(in: CharacterSet(charactersIn: "\"'"))
+            
+            if cleanPath.hasSuffix(".swift") && !cleanPath.hasPrefix("-") {
+                swiftFiles.append(cleanPath)
+            }
+        }
+        
+        // Filter out the changed file to create list of other files
+        // Use multiple comparison strategies to ensure accurate filtering
+        let otherFiles = swiftFiles.filter { file in
+            // Strategy 1: Direct string comparison
+            if file == changedFile {
+                return false
+            }
+            
+            // Strategy 2: Standardized path comparison
+            let normalizedFile = URL(fileURLWithPath: file).standardized.path
+            let normalizedChangedFile = URL(fileURLWithPath: changedFile).standardized.path
+            if normalizedFile == normalizedChangedFile {
+                return false
+            }
+            
+            // Strategy 3: Last path component comparison (for different path formats)
+            let fileComponent = URL(fileURLWithPath: file).lastPathComponent
+            let changedComponent = URL(fileURLWithPath: changedFile).lastPathComponent
+            if fileComponent == changedComponent && fileComponent.hasSuffix(".swift") {
+                // Additional check: if both contain the same parent directory structure
+                let fileParent = URL(fileURLWithPath: file).deletingLastPathComponent().lastPathComponent
+                let changedParent = URL(fileURLWithPath: changedFile).deletingLastPathComponent().lastPathComponent
+                if fileParent == changedParent {
+                    return false
+                }
+            }
+            
+            return true
+        }
+        
+        log("🔍 Extracted \(swiftFiles.count) Swift files from command (\(otherFiles.count) others)")
+        log("🎯 Primary file: \(URL(fileURLWithPath: changedFile).lastPathComponent)")
+        if !otherFiles.isEmpty {
+            log("📁 Other files: \(otherFiles.map { URL(fileURLWithPath: $0).lastPathComponent }.joined(separator: ", "))")
+        }
+        return (allFiles: swiftFiles, otherFiles: otherFiles)
+    }
+    
+    /// Parse command string into components, respecting quoted arguments
+    private func parseCommandComponents(_ command: String) -> [String] {
+        var components: [String] = []
+        var currentComponent = ""
+        var inQuotes = false
+        var quoteChar: Character = "\""
+        var i = command.startIndex
+        
+        while i < command.endIndex {
+            let char = command[i]
+            
+            if !inQuotes {
+                if char == "\"" || char == "'" {
+                    inQuotes = true
+                    quoteChar = char
+                    currentComponent.append(char)
+                } else if char.isWhitespace {
+                    if !currentComponent.isEmpty {
+                        components.append(currentComponent)
+                        currentComponent = ""
+                    }
+                } else {
+                    currentComponent.append(char)
+                }
+            } else {
+                currentComponent.append(char)
+                if char == quoteChar {
+                    // Check if it's escaped
+                    let prevIndex = command.index(before: i)
+                    if prevIndex >= command.startIndex && command[prevIndex] != "\\" {
+                        inQuotes = false
+                    }
+                }
+            }
+            
+            i = command.index(after: i)
+        }
+        
+        // Add the last component if not empty
+        if !currentComponent.isEmpty {
+            components.append(currentComponent)
+        }
+        
+        return components
+    }
+    
+    /// Transform Bazel command to use Swift frontend mode for single-file compilation
+    /// Returns nil if transformation isn't beneficial or fails
+    private func transformToFrontendMode(command: String, primaryFile: String) -> String? {
+        // Check if command is already a Swift frontend command
+        if command.contains("swiftc -frontend") || command.contains("swift-frontend") {
+            log("⚡ Command is already in frontend mode, adjusting primary file")
+            return adjustExistingFrontendCommand(command: command, newPrimaryFile: primaryFile)
+        }
+        
+        let (allFiles, otherFiles) = extractSwiftSourceFiles(from: command, changedFile: primaryFile)
+        
+        // Only optimize if there are multiple Swift files (worth the frontend overhead)
+        guard allFiles.count > 1 else {
+            log("⚡ Skipping frontend optimization: only \(allFiles.count) Swift file(s)")
+            return nil
+        }
+        
+        // Validate that primary file is not in other files (double-check filtering)
+        let primaryFileName = URL(fileURLWithPath: primaryFile).lastPathComponent
+        let duplicateInOthers = otherFiles.filter { otherFile in
+            let otherFileName = URL(fileURLWithPath: otherFile).lastPathComponent
+            return otherFileName == primaryFileName
+        }
+        
+        if !duplicateInOthers.isEmpty {
+            log("⚠️ Found potential duplicates in other files, removing them:")
+            for duplicate in duplicateInOthers {
+                log("   - Removing: \(duplicate)")
+            }
+        }
+        
+        // Filter out any remaining duplicates based on filename
+        let cleanOtherFiles = otherFiles.filter { otherFile in
+            let otherFileName = URL(fileURLWithPath: otherFile).lastPathComponent
+            return otherFileName != primaryFileName
+        }
+        
+        log("⚡ Transforming to frontend mode: primary=\(primaryFileName), others=\(cleanOtherFiles.count)")
+        
+        var transformedCommand = command
+        
+        // Step 1: Replace 'swiftc' with 'swiftc -frontend'
+        if let swiftcRange = transformedCommand.range(of: "swiftc") {
+            transformedCommand.replaceSubrange(swiftcRange, with: "swiftc -frontend")
+        }
+        
+        // Step 2: Remove all .swift files from the command
+        for swiftFile in allFiles {
+            // Handle both quoted and unquoted file paths
+            let quotedFile = "\"\(swiftFile)\""
+            let patterns = [
+                " \(swiftFile)(?=\\s|$)",
+                " \(quotedFile)(?=\\s|$)",
+                "\\s+\(NSRegularExpression.escapedPattern(for: swiftFile))(?=\\s|$)",
+                "\\s+\(NSRegularExpression.escapedPattern(for: quotedFile))(?=\\s|$)"
+            ]
+            
+            for pattern in patterns {
+                if let regex = try? NSRegularExpression(pattern: pattern, options: []) {
+                    let range = NSRange(transformedCommand.startIndex..., in: transformedCommand)
+                    transformedCommand = regex.stringByReplacingMatches(in: transformedCommand, options: [], range: range, withTemplate: "")
+                }
+            }
+        }
+        
+        // Step 3: Add -primary-file with the changed file
+        transformedCommand += " -primary-file \(primaryFile)"
+        
+        // Step 4: Add other Swift files as secondary sources (using cleaned list)
+        for otherFile in cleanOtherFiles {
+            transformedCommand += " \(otherFile)"  
+        }
+        
+        log("✅ Frontend mode transformation complete")
+        return transformedCommand
+    }
+    
+    /// Adjust existing frontend command to use the correct primary file
+    /// This handles cases where Bazel already generates frontend commands but with different primary files
+    private func adjustExistingFrontendCommand(command: String, newPrimaryFile: String) -> String? {
+        log("🔄 Adjusting existing frontend command for primary file: \(URL(fileURLWithPath: newPrimaryFile).lastPathComponent)")
+        
+        var adjustedCommand = command
+        
+        // Find and replace existing -primary-file argument
+        let primaryFilePattern = #" -primary-file ([^\s\\]*(?:\\.[^\s\\]*)*)"#
+        if let regex = try? NSRegularExpression(pattern: primaryFilePattern, options: []) {
+            let range = NSRange(adjustedCommand.startIndex..., in: adjustedCommand)
+            let matches = regex.matches(in: adjustedCommand, options: [], range: range)
+            
+            if let match = matches.first, let matchRange = Range(match.range, in: adjustedCommand) {
+                // Replace the entire -primary-file argument
+                let oldPrimaryFile = String(adjustedCommand[matchRange])
+                adjustedCommand = adjustedCommand.replacingOccurrences(of: oldPrimaryFile, with: " -primary-file \(newPrimaryFile)")
+                log("🔄 Replaced primary file in existing frontend command")
+                log("   Old: \(oldPrimaryFile)")
+                log("   New: -primary-file \(URL(fileURLWithPath: newPrimaryFile).lastPathComponent)")
+            }
+        } else {
+            // If no -primary-file found, add it
+            adjustedCommand += " -primary-file \(newPrimaryFile)"
+            log("➕ Added -primary-file to existing frontend command")
+        }
+        
+        // Remove existing -o flag since prepareFinalCommand will add the correct one
+        let outputPattern = #" -o ([^\s\\]*(?:\\.[^\s\\]*)*)"#
+        if let regex = try? NSRegularExpression(pattern: outputPattern, options: []) {
+            let range = NSRange(adjustedCommand.startIndex..., in: adjustedCommand)
+            let matches = regex.matches(in: adjustedCommand, options: [], range: range)
+            
+            if let match = matches.first, let matchRange = Range(match.range, in: adjustedCommand) {
+                let oldOutput = String(adjustedCommand[matchRange])
+                adjustedCommand = adjustedCommand.replacingOccurrences(of: oldOutput, with: "")
+                log("🗑️ Removed existing -o flag from frontend command: \(oldOutput)")
+            }
+        }
+        
+        // Clean up extra whitespace
+        adjustedCommand = adjustedCommand.replacingOccurrences(of: "\\s+", with: " ", options: .regularExpression)
+        adjustedCommand = adjustedCommand.trimmingCharacters(in: .whitespacesAndNewlines)
+        
+        return adjustedCommand
     }
     
     
