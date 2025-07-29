@@ -49,7 +49,8 @@ let package = Package(
         // Boots up standalone injection on load for InjectionLite product
         .target(
             name: "InjectionBazel", dependencies: ["InjectionImpl",
-                .product(name: "DLKitD", package: "DLKit")]),
+                .product(name: "DLKitD", package: "DLKit"),
+                .product(name: "PopenD", package: "Popen")]),
         .target(
             name: "InjectionImplC"),
         // Yes, there are tests.
