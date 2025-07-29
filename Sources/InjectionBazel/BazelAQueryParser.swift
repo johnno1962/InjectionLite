@@ -83,6 +83,12 @@ public class BazelAQueryParser: LiteParser {
                        found: inout (logDir: String, scanner: Popen?)?) -> String? {
         log("🔍 BazelAQueryParser: Getting command for \(source)")
         
+        // Ignore SPM Package.swift files - they can't be hot reloaded anyway
+        if isSPMPackageManifest(source) {
+            log("⏭️ Ignoring SPM Package.swift file: \(URL(fileURLWithPath: source).lastPathComponent)")
+            return nil
+        }
+        
         // Check cache first - include app target in cache key for session-based caching
         let appTargetKey = detectedAppTarget ?? "no-target"
         let cacheKey = "\(source):\(platformFilter):\(appTargetKey)"
@@ -418,6 +424,27 @@ public class BazelAQueryParser: LiteParser {
         return "/Applications/Xcode.app/Contents/Developer"
     }
     
+    // MARK: - File Filtering
+    
+    /// Check if a file is an SPM Package.swift manifest that should be ignored
+    private func isSPMPackageManifest(_ filePath: String) -> Bool {
+        // Only check files named Package.swift
+        guard filePath.hasSuffix("Package.swift") else {
+            return false
+        }
+        
+        do {
+            let content = try String(contentsOfFile: filePath, encoding: .utf8)
+            
+            // SPM Package.swift files must have both patterns
+            return content.contains("let package = Package") && content.contains("import PackageDescription")
+        } catch {
+            // If we can't read the file, assume it's not an SPM manifest (don't block legitimate files)
+            log("⚠️ Could not read Package.swift file to verify SPM manifest: \(error)")
+            return false
+        }
+    }
+
     // MARK: - Cache Management
     
     private func getCachedCommand(for key: String) -> String? {
