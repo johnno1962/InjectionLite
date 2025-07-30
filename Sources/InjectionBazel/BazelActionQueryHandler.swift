@@ -39,7 +39,6 @@ private final class TargetArrayWrapper {
 
 public enum BazelActionQueryError: Error, CustomStringConvertible {
     case workspaceNotFound
-    case bazelExecutableNotFound
     case queryExecutionFailed(String)
     case noTargetsFound(String)
     case noCompilationCommandFound(String)
@@ -50,8 +49,6 @@ public enum BazelActionQueryError: Error, CustomStringConvertible {
         switch self {
         case .workspaceNotFound:
             return "Bazel workspace not found"
-        case .bazelExecutableNotFound:
-            return "Bazel executable not found in PATH"
         case .queryExecutionFailed(let error):
             return "AQuery execution failed: \(error)"
         case .noTargetsFound(let source):
@@ -77,7 +74,8 @@ public class BazelActionQueryHandler {
     
     public init(workspaceRoot: String, bazelExecutable: String = "/opt/homebrew/bin/bazelisk") {
         self.workspaceRoot = workspaceRoot
-        self.bazelExecutable = bazelExecutable
+        // Resolve the actual bazel executable path with fallback logic
+        self.bazelExecutable = BinaryResolver.shared.resolveBazelExecutable(preferred: bazelExecutable) ?? bazelExecutable
     }
     
     /// Get the currently cached app target
@@ -745,11 +743,17 @@ public class BazelActionQueryHandler {
     }
     
     private func resolveXcodeSDKRoot() -> String? {
+        // Get xcrun path with fallback logic
+        guard let xcrunPath = BinaryResolver.shared.resolveXcrunExecutable() else {
+            log("⚠️ xcrun not available - cannot resolve __BAZEL_XCODE_SDKROOT__")
+            return nil
+        }
+        
         // Try different SDK types in order of preference (simulator first)
         let sdks = ["iphonesimulator", "iphoneos", "macosx"]
         
         for sdk in sdks {
-            if let output = Popen.task(exec: "/usr/bin/xcrun", 
+            if let output = Popen.task(exec: xcrunPath, 
                                       arguments: ["--sdk", sdk, "--show-sdk-path"],
                                       cd: workspaceRoot) {
                 let sdkPath = output.trimmingCharacters(in: .whitespacesAndNewlines)

@@ -276,15 +276,20 @@ public class BazelAQueryParser: LiteParser {
         
         // Replace __BAZEL_XCODE_SDKROOT__ with actual SDK path
         if result.contains("__BAZEL_XCODE_SDKROOT__") {
-            // Use xcrun to get the simulator SDK path (preferred for development)
-            if let output = Popen.task(exec: "/usr/bin/xcrun", 
-                                      arguments: ["--sdk", "iphonesimulator", "--show-sdk-path"],
-                                      cd: workspaceRoot) {
-                let sdkPath = output.trimmingCharacters(in: .whitespacesAndNewlines)
-                if !sdkPath.isEmpty && !sdkPath.contains("error") {
-                    result = result.replacingOccurrences(of: "__BAZEL_XCODE_SDKROOT__", with: sdkPath)
-                    log("✅ Replaced __BAZEL_XCODE_SDKROOT__ with \(sdkPath)")
+            // Get xcrun path with fallback logic
+            if let xcrunPath = BinaryResolver.shared.resolveXcrunExecutable() {
+                // Use xcrun to get the simulator SDK path (preferred for development)
+                if let output = Popen.task(exec: xcrunPath, 
+                                          arguments: ["--sdk", "iphonesimulator", "--show-sdk-path"],
+                                          cd: workspaceRoot) {
+                    let sdkPath = output.trimmingCharacters(in: .whitespacesAndNewlines)
+                    if !sdkPath.isEmpty && !sdkPath.contains("error") {
+                        result = result.replacingOccurrences(of: "__BAZEL_XCODE_SDKROOT__", with: sdkPath)
+                        log("✅ Replaced __BAZEL_XCODE_SDKROOT__ with \(sdkPath)")
+                    }
                 }
+            } else {
+                log("⚠️ xcrun not available - cannot resolve __BAZEL_XCODE_SDKROOT__")
             }
         }
         
