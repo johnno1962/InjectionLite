@@ -56,7 +56,6 @@ public class BazelAQueryParser: LiteParser {
             bazelExecutable: bazelExecutable
         )
         
-        log("✅ BazelAQueryParser initialized for workspace: \(workspaceRoot)")
     }
     
     // MARK: - App Target Management
@@ -81,11 +80,17 @@ public class BazelAQueryParser: LiteParser {
     
     public func command(for source: String, platformFilter: String,
                        found: inout (logDir: String, scanner: Popen?)?) -> String? {
-        log("🔍 BazelAQueryParser: Getting command for \(source)")
+        let fileName = URL(fileURLWithPath: source).lastPathComponent
+        
+        // One-time initialization logging on first use
+        if detectedAppTarget == nil {
+            log("🔍 Detected Bazel workspace at: \(workspaceRoot)")
+            log("✅ BazelAQueryParser initialized for workspace: \(workspaceRoot)")
+        }
         
         // Ignore SPM Package.swift files - they can't be hot reloaded anyway
         if isSPMPackageManifest(source) {
-            log("⏭️ Ignoring SPM Package.swift file: \(URL(fileURLWithPath: source).lastPathComponent)")
+            log("⏭️ Ignoring SPM Package.swift file: \(fileName)")
             return nil
         }
         
@@ -93,13 +98,12 @@ public class BazelAQueryParser: LiteParser {
         let appTargetKey = detectedAppTarget ?? "no-target"
         let cacheKey = "\(source):\(platformFilter):\(appTargetKey)"
         if let cachedCommand = getCachedCommand(for: cacheKey) {
-            log("💾 Using cached optimized Bazel command for \(source)")
             return cachedCommand
         }
         
         // Use synchronous wrapper for async operations to conform to LiteParser protocol
         guard let rawCommand = findCompilationCommandSync(for: source, platformFilter: platformFilter) else {
-            log("❌ No Bazel compilation command found for \(source)")
+            log("❌ No Bazel compilation command found for \(fileName)")
             return nil
         }
         
@@ -108,7 +112,6 @@ public class BazelAQueryParser: LiteParser {
         
         // Cache the optimized result
         setCachedCommand(optimizedCommand, for: cacheKey)
-        log("✅ Found and optimized Bazel compilation command for \(source)")
         
         return optimizedCommand
     }
@@ -116,8 +119,6 @@ public class BazelAQueryParser: LiteParser {
     public func prepareFinalCommand(command: String, source: String, objectFile: String, tmpdir: String, injectionNumber: Int) -> String {
         // Check if this is a frontend command (already optimized)
         if command.contains("swiftc -frontend") {
-            // Frontend commands should use -o flag, not output-file-map
-            log("🎯 Using -o flag for frontend command")
             return command + " -o \(objectFile)"
         }
         
@@ -136,8 +137,6 @@ public class BazelAQueryParser: LiteParser {
     /// Apply frontend optimizations that can be cached and reused
     /// This includes path normalization, frontend transformation, and command cleaning
     private func applyFrontendOptimizations(to command: String, primaryFile: String) -> String {
-        log("⚡ Applying frontend optimizations to command")
-        
         // Step 1: Try to optimize with Swift frontend mode for single-file compilation
         let frontendCommand = transformToFrontendMode(command: command, primaryFile: primaryFile) ?? command
         
@@ -150,8 +149,6 @@ public class BazelAQueryParser: LiteParser {
     /// Clean frontend command by removing -Xfrontend flags and output-file-map
     /// Since we're already in frontend mode, -Xfrontend is redundant
     private func cleanFrontendCommand(_ command: String) -> String {
-        log("🧹 Cleaning frontend command")
-        
         var cleanedCommand = command
         
         // Remove -Xfrontend flags since we're already in frontend mode
@@ -176,7 +173,6 @@ public class BazelAQueryParser: LiteParser {
         cleanedCommand = cleanedCommand.replacingOccurrences(of: "\\s+", with: " ", options: .regularExpression)
         cleanedCommand = cleanedCommand.trimmingCharacters(in: .whitespacesAndNewlines)
         
-        log("✅ Frontend command cleaned")
         return cleanedCommand
     }
 
@@ -186,7 +182,6 @@ public class BazelAQueryParser: LiteParser {
         do {
             // Auto-discover app target on first use if not already cached
             if detectedAppTarget == nil {
-                log("🔍 Auto-discovering app target for first source file: \(sourcePath)")
                 autoDiscoverAppTarget(for: sourcePath)
             }
             
@@ -197,7 +192,6 @@ public class BazelAQueryParser: LiteParser {
             // Update our cached app target if one was discovered
             if detectedAppTarget == nil, let cachedTarget = actionQueryHandler.currentAppTarget {
                 detectedAppTarget = cachedTarget
-                log("📱 Updated cached app target from discovery: \(cachedTarget)")
             }
             
             // Clean and prepare command for hot reloading execution
@@ -215,8 +209,6 @@ public class BazelAQueryParser: LiteParser {
     
     /// Clean Bazel compilation command for hot reloading execution
     private func cleanBazelCommand(_ command: String) -> String {
-        log("🔧 Cleaning Bazel command for hot reloading")
-        
         var cleanedCommand = command
         
         // Remove Bazel-specific flags that interfere with hot reloading
@@ -247,7 +239,6 @@ public class BazelAQueryParser: LiteParser {
         // Replace Bazel placeholders in the command with actual values
         let finalCommand = replaceBazelPlaceholders(in: cleanedCommand)
         
-        log("✅ Cleaned Bazel command ready for execution")
         return finalCommand
     }
     
@@ -285,7 +276,6 @@ public class BazelAQueryParser: LiteParser {
                     let sdkPath = output.trimmingCharacters(in: .whitespacesAndNewlines)
                     if !sdkPath.isEmpty && !sdkPath.contains("error") {
                         result = result.replacingOccurrences(of: "__BAZEL_XCODE_SDKROOT__", with: sdkPath)
-                        log("✅ Replaced __BAZEL_XCODE_SDKROOT__ with \(sdkPath)")
                     }
                 }
             } else {
@@ -297,7 +287,6 @@ public class BazelAQueryParser: LiteParser {
         if result.contains("__BAZEL_XCODE_DEVELOPER_DIR__") {
             let developerDir = "/Applications/Xcode.app/Contents/Developer"
             result = result.replacingOccurrences(of: "__BAZEL_XCODE_DEVELOPER_DIR__", with: developerDir)
-            log("✅ Replaced __BAZEL_XCODE_DEVELOPER_DIR__ with \(developerDir)")
         }
         
         return result

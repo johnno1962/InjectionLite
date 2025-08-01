@@ -41,10 +41,8 @@ public struct Recompiler {
     func parser(forProjectContaining source: String) -> LiteParser {
         // Check if this is a Bazel workspace
         if let workspaceRoot = BazelInterface.findWorkspaceRoot(containing: source) {
-            log("🔍 Detected Bazel workspace at: \(workspaceRoot)")
             do {
                 let bazelParser = try BazelAQueryParser(workspaceRoot: workspaceRoot)
-                log("✅ Using BazelAQueryParser for \(source)")
                 return bazelParser
             } catch {
                 log("⚠️ Failed to create BazelAQueryParser: \(error), falling back to LogParser")
@@ -97,7 +95,8 @@ public struct Recompiler {
             }
         }
 
-        log("Recompiling \(source) \(platformFilter)")
+        let fileName = URL(fileURLWithPath: source).lastPathComponent
+        log("🔄 [\(fileName)] Recompiling\(platformFilter.isEmpty ? "" : " (\(platformFilter))")")
 
         Reloader.injectionNumber += 1
         let objectFile = tmpbase + ".o"
@@ -110,6 +109,9 @@ public struct Recompiler {
             tmpdir: tmpdir,
             injectionNumber: Reloader.injectionNumber
         ) + " \(benchmark)"
+        
+        // Time the compilation step
+        let compilationStartTime = Date.timeIntervalSinceReferenceDate
         while let errors = Popen.system(finalCommand, errors: nil) {
             for slow: String in errors[Reloader.typeCheckRegex] {
                 log(slow)
@@ -137,10 +139,13 @@ public struct Recompiler {
             }
             log("Processing command: "+finalCommand+"\n")
             log("Current log: \(FileWatcher.derivedLog ?? "no log")")
-            log("⚠️ Compiler output:\n"+errors)
-            log("⚠️ Recompilation failed")
+            log("❌ Compilation failed:\n"+errors)
             return nil
         }
+        
+        // Log successful compilation with timing
+        let compilationDuration = Date.timeIntervalSinceReferenceDate - compilationStartTime
+        log(String(format: "⚡ Compiled in %.0fms", compilationDuration * 1000))
 
         if let frameworksArg: String = command[
             " -F (\(Self.argumentRegex)/PackageFrameworks) "] {
@@ -155,6 +160,7 @@ public struct Recompiler {
         }
 
         guard let dylib = link(objectFile: objectFile, command) else {
+            log("❌ Linking failed")
             return nil
         }
         #if os(tvOS)

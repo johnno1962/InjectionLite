@@ -185,7 +185,7 @@ public struct Reloader {
             detail("Interposed \(count) time\(s) " + (sym.swiftDemangle ?? sym))
         }
 
-        log("Loaded and rebound \(symbols.count) symbols, classes \(classes.new)")
+        log("✅ Hot reload complete - Rebound \(symbols.count) symbols, classes \(classes.new)")
         return (image, classes)
     }
 
