@@ -29,26 +29,26 @@ public struct Sweeper {
     public func sweepAndRunTests(image: ImageSymbols,
                                  classes: Reloader.ClassInfo) {
         DispatchQueue.main.async {
-            let toSweep = classes.old + hookedPatch(of: classes.generics, in: image)
+            let toSweep = classes.old + self.hookedPatch(of: classes.generics, in: image)
             let oldWay = getenv(INJECTION_OF_GENERICS) != nil && toSweep.count == classes.old.count
-            performSweep(oldClasses: toSweep, oldWay ? classes.generics : [], image: image)
+            self.performSweep(oldClasses: toSweep, oldWay ? classes.generics : [], image: image)
 
-            NotificationCenter.default.post(name: notification, object: classes.new)
+            NotificationCenter.default.post(name: self.notification, object: classes.new)
 
             if let XCTestCase = objc_getClass("XCTestCase") as? AnyClass {
-                let testClasses = classes.new.filter { isSubclass($0, of: XCTestCase) }
+                let testClasses = classes.new.filter { self.isSubclass($0, of: XCTestCase) }
 
                 // Thanks https://github.com/johnno1962/injectionforxcode/pull/234
                 if !testClasses.isEmpty {
                     print("\n")
-                    testQueue.async {
-                        testQueue.suspend()
+                    self.testQueue.async {
+                        self.testQueue.suspend()
                         let timer = Timer(timeInterval: 0, repeats:false, block: { _ in
                             for newClass in testClasses {
                                 log("Running test \(_typeName(newClass))")
                                 NSObject.runXCTestCase(newClass)
                             }
-                            testQueue.resume()
+                            self.testQueue.resume()
                         })
                         RunLoop.main.add(timer, forMode: RunLoop.Mode.common)
                     }

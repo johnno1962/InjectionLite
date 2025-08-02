@@ -316,7 +316,11 @@ public class BazelAQueryParser: LiteParser {
             
             // Write the minimal map to a temporary file with unescaped forward slashes
             let tempMapPath = tmpdir + "eval\(injectionNumber)_output_map.json"
-            let mapData = try JSONSerialization.data(withJSONObject: minimalMap, options: [.prettyPrinted, .sortedKeys, .withoutEscapingSlashes])
+            var options: JSONSerialization.WritingOptions = [.prettyPrinted]
+            if #available(macOS 15.0, iOS 13.0, *) {
+                options.formUnion( [.sortedKeys, .withoutEscapingSlashes] )
+            }
+            let mapData = try JSONSerialization.data(withJSONObject: minimalMap, options: options)
             try mapData.write(to: URL(fileURLWithPath: tempMapPath))
             
             // Replace the output-file-map path in the command

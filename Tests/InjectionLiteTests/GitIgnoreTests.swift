@@ -6,7 +6,7 @@
 //
 
 import XCTest
-@testable import InjectionLite
+@testable import InjectionBazel
 
 final class GitIgnoreTests: XCTestCase {
     

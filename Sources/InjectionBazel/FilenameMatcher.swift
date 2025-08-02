@@ -237,7 +237,7 @@ private enum ResultPart: Equatable {
     }
 }
 
-public extension Collection<FilenameMatcher> {
+public extension Collection where Element == FilenameMatcher {
     func anyMatch(filename: String) -> Bool {
         contains { $0.match(filename: filename) }
     }

@@ -5,7 +5,7 @@ import PackageDescription
 
 let package = Package(
     name: "InjectionLite",
-    platforms: [.iOS("13"), .macOS("14")],
+    platforms: [.iOS(.v12), .macOS("10.12")],
     products: [
         // Products define the executables and libraries a package produces, and make them visible to other packages.
         // A self-contained of injection including log parsing and recompiling

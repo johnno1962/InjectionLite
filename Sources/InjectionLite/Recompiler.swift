@@ -38,7 +38,7 @@ public struct Recompiler {
         return tmpdir+"eval\(Reloader.injectionNumber)"
     }
   
-    func parser(forProjectContaining source: String) -> LiteParser {
+    func findParser(forProjectContaining source: String) -> LiteParser {
         // Check if this is a Bazel workspace
         if let workspaceRoot = BazelInterface.findWorkspaceRoot(containing: source) {
             do {
@@ -56,7 +56,7 @@ public struct Recompiler {
     /// Recompile a source to produce a dynamic library that can be loaded
     mutating func recompile(source: String, platformFilter: String = "",
                             dylink: Bool) -> String? {
-        let parser = parser(forProjectContaining: source)
+        let parser = findParser(forProjectContaining: source)
         var scanned: (logDir: String, scanner: Popen?)?
         let cacheKey = source+platformFilter
         guard var command = longTermCache[cacheKey] as? String ??
@@ -129,6 +129,7 @@ public struct Recompiler {
                     String(cString: strerror(errno)))
             }
 
+//            if !errors.contains(" error: ") { break }
             if !errors.contains("error: ") { break }
             let wasCached = longTermCache[cacheKey] != nil
             longTermCache[cacheKey] = nil
