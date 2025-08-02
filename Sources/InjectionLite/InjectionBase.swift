@@ -37,7 +37,11 @@ open class InjectionBase: NSObject {
         let home = NSHomeDirectory()
             .replacingOccurrences(of: #"(/Users/[^/]+).*"#,
                                   with: "$1", options: .regularExpression)
-        var dirs = [home]
+        var dirs = if let bazelWorkspace = getenv("BUILD_WORKSPACE_DIRECTORY") {
+          [String(cString: bazelWorkspace)]
+        } else {
+          [home]
+        }
         let library = home+"/Library"
         if let extra = getenv(INJECTION_DIRECTORIES) {
             dirs = String(cString: extra).components(separatedBy: ",")

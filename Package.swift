@@ -49,18 +49,14 @@ let package = Package(
         // Boots up standalone injection on load for InjectionLite product
         .target(
             name: "InjectionBazel", dependencies: ["InjectionImpl",
-                .product(name: "DLKitD", package: "DLKit")]),
+                .product(name: "DLKitD", package: "DLKit"),
+                .product(name: "PopenD", package: "Popen")]),
         .target(
             name: "InjectionImplC"),
         // Yes, there are tests.
         .testTarget(
             name: "InjectionLiteTests",
             dependencies: ["InjectionLite"],
-            linkerSettings: [.unsafeFlags([
-                "-Xlinker", "-interposable"])]),
-        .testTarget(
-            name: "InjectionBazelTests",
-            dependencies: ["InjectionBazel"],
             linkerSettings: [.unsafeFlags([
                 "-Xlinker", "-interposable"])])]
 )

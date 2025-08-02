@@ -25,13 +25,6 @@ import PopenD
 import Popen
 #endif
 
-extension String {
-    var unescape: String {
-        return self[#"\\(.)"#, "$1"]
-    }
-}
-
-
 public struct Recompiler {
     
     static var packageFrameworks: String?
@@ -48,10 +41,8 @@ public struct Recompiler {
     func parser(forProjectContaining source: String) -> LiteParser {
         // Check if this is a Bazel workspace
         if let workspaceRoot = BazelInterface.findWorkspaceRoot(containing: source) {
-            log("🔍 Detected Bazel workspace at: \(workspaceRoot)")
             do {
                 let bazelParser = try BazelAQueryParser(workspaceRoot: workspaceRoot)
-                log("✅ Using BazelAQueryParser for \(source)")
                 return bazelParser
             } catch {
                 log("⚠️ Failed to create BazelAQueryParser: \(error), falling back to LogParser")
@@ -104,14 +95,24 @@ public struct Recompiler {
             }
         }
 
-        log("Recompiling \(source) \(platformFilter)")
+        let fileName = URL(fileURLWithPath: source).lastPathComponent
+        log("🔄 [\(fileName)] Recompiling\(platformFilter.isEmpty ? "" : " (\(platformFilter))")")
 
         Reloader.injectionNumber += 1
         let objectFile = tmpbase + ".o"
         unlink(objectFile)
         let benchmark = source.hasSuffix(".swift") ? Reloader.typeCheckLimit : ""
-        while let errors = Popen.system(command+" -o \(objectFile) " +
-                                        benchmark, errors: nil) {
+        let finalCommand = parser.prepareFinalCommand(
+            command: command,
+            source: source,
+            objectFile: objectFile,
+            tmpdir: tmpdir,
+            injectionNumber: Reloader.injectionNumber
+        ) + " \(benchmark)"
+        
+        // Time the compilation step
+        let compilationStartTime = Date.timeIntervalSinceReferenceDate
+        while let errors = Popen.system(finalCommand, errors: nil) {
             for slow: String in errors[Reloader.typeCheckRegex] {
                 log(slow)
             }
@@ -128,7 +129,7 @@ public struct Recompiler {
                     String(cString: strerror(errno)))
             }
 
-            if !errors.contains(" error: ") { break }
+            if !errors.contains("error: ") { break }
             let wasCached = longTermCache[cacheKey] != nil
             longTermCache[cacheKey] = nil
             writeToCache()
@@ -136,12 +137,15 @@ public struct Recompiler {
                 return recompile(source: source, platformFilter:
                                     platformFilter, dylink: dylink)
             }
-            log("Processing command: "+command+" -o \(objectFile)\n")
+            log("Processing command: "+finalCommand+"\n")
             log("Current log: \(FileWatcher.derivedLog ?? "no log")")
-            log("⚠️ Compiler output:\n"+errors)
-            log("⚠️ Recompilation failed")
+            log("❌ Compilation failed:\n"+errors)
             return nil
         }
+        
+        // Log successful compilation with timing
+        let compilationDuration = Date.timeIntervalSinceReferenceDate - compilationStartTime
+        log(String(format: "⚡ Compiled in %.0fms", compilationDuration * 1000))
 
         if let frameworksArg: String = command[
             " -F (\(Self.argumentRegex)/PackageFrameworks) "] {
@@ -156,6 +160,7 @@ public struct Recompiler {
         }
 
         guard let dylib = link(objectFile: objectFile, command) else {
+            log("❌ Linking failed")
             return nil
         }
         #if os(tvOS)
