@@ -36,16 +36,26 @@ public final class GitIgnoreParser {
             if trimmed.hasPrefix("!") {
                 self.isNegation = true
                 let negatedPattern = String(trimmed.dropFirst())
-                self.pattern = negatedPattern
+                self.pattern = GitIgnorePattern.normalizePattern(negatedPattern)
                 self.isDirectory = negatedPattern.hasSuffix("/")
             } else {
                 self.isNegation = false
-                self.pattern = trimmed
+                self.pattern = GitIgnorePattern.normalizePattern(trimmed)
                 self.isDirectory = trimmed.hasSuffix("/")
             }
             
             // Get cached matcher or create new one
             self.matcher = GitIgnorePattern.getMatcher(for: self.pattern)
+        }
+        
+        /// Normalize gitignore patterns to handle leading slash with dot cases
+        private static func normalizePattern(_ pattern: String) -> String {
+            // Handle patterns like "/.bazel-*" -> ".bazel-*"
+            // This allows /.bazel-grpc-logs to match .bazel-grpc-logs
+            if pattern.hasPrefix("/.") {
+                return String(pattern.dropFirst()) // Remove leading slash
+            }
+            return pattern
         }
         
         private static func getMatcher(for pattern: String) -> FilenameMatcher? {
