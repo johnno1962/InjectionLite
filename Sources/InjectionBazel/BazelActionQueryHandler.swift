@@ -264,7 +264,7 @@ public class BazelActionQueryHandler {
         
         var commands: [(command: String, configuration: String)] = []
         
-        for (index, actionBlock) in actionBlocks.enumerated() {
+        for actionBlock in actionBlocks {
             let actionText = "action {" + actionBlock
             
             do {
