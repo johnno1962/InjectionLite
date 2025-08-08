@@ -31,7 +31,6 @@ public protocol LiteParser {
 
 public class BazelAQueryParser: LiteParser {
     private let workspaceRoot: String
-    private let bazelExecutable: String
     private let bazelInterface: BazelInterface
     private let actionQueryHandler: BazelActionQueryHandler
     
@@ -41,21 +40,17 @@ public class BazelAQueryParser: LiteParser {
     // App target detection for optimized queries
     private var detectedAppTarget: String?
     
-    public init(workspaceRoot: String, bazelExecutable: String = "/opt/homebrew/bin/bazelisk") throws {
+    public init(workspaceRoot: String) throws {
         self.workspaceRoot = workspaceRoot
-        self.bazelExecutable = bazelExecutable
         
         // Initialize Bazel components
         self.bazelInterface = try BazelInterface(
-            workspaceRoot: workspaceRoot,
-            bazelExecutable: bazelExecutable
+            workspaceRoot: workspaceRoot
         )
         
-        self.actionQueryHandler = BazelActionQueryHandler(
-            workspaceRoot: workspaceRoot,
-            bazelExecutable: bazelExecutable
+        self.actionQueryHandler = try BazelActionQueryHandler(
+            workspaceRoot: workspaceRoot
         )
-        
     }
     
     // MARK: - App Target Management
@@ -85,7 +80,6 @@ public class BazelAQueryParser: LiteParser {
         // One-time initialization logging on first use
         if detectedAppTarget == nil {
             log("🔍 Detected Bazel workspace at: \(workspaceRoot)")
-            log("✅ BazelAQueryParser initialized for workspace: \(workspaceRoot)")
         }
         
         // Ignore SPM Package.swift files - they can't be hot reloaded anyway
@@ -161,7 +155,7 @@ public class BazelAQueryParser: LiteParser {
         
         // Remove standalone -Xfrontend flags that might be left over
         cleanedCommand = cleanedCommand.replacingOccurrences(of: " -Xfrontend ", with: " ")
-        
+
         // Remove output-file-map since frontend mode will use -o instead
         let outputFileMapRegex = #" -output-file-map ([^\s\\]*(?:\\.[^\s\\]*)*)"#
         if let regex = try? NSRegularExpression(pattern: outputFileMapRegex, options: []) {
@@ -257,7 +251,6 @@ public class BazelAQueryParser: LiteParser {
             )
         }
         
-        log("🎯 Applied platform filter '\(filter)' to Bazel command")
         return filteredCommand
     }
     
@@ -502,11 +495,6 @@ public class BazelAQueryParser: LiteParser {
             return true
         }
         
-        log("🔍 Extracted \(swiftFiles.count) Swift files from command (\(otherFiles.count) others)")
-        log("🎯 Primary file: \(URL(fileURLWithPath: changedFile).lastPathComponent)")
-        if !otherFiles.isEmpty {
-            log("📁 Other files: \(otherFiles.map { URL(fileURLWithPath: $0).lastPathComponent }.joined(separator: ", "))")
-        }
         return (allFiles: swiftFiles, otherFiles: otherFiles)
     }
     
@@ -567,12 +555,6 @@ public class BazelAQueryParser: LiteParser {
         
         let (allFiles, otherFiles) = extractSwiftSourceFiles(from: command, changedFile: primaryFile)
         
-        // Only optimize if there are multiple Swift files (worth the frontend overhead)
-        guard allFiles.count > 1 else {
-            log("⚡ Skipping frontend optimization: only \(allFiles.count) Swift file(s)")
-            return nil
-        }
-        
         // Validate that primary file is not in other files (double-check filtering)
         let primaryFileName = URL(fileURLWithPath: primaryFile).lastPathComponent
         let duplicateInOthers = otherFiles.filter { otherFile in
@@ -592,8 +574,6 @@ public class BazelAQueryParser: LiteParser {
             let otherFileName = URL(fileURLWithPath: otherFile).lastPathComponent
             return otherFileName != primaryFileName
         }
-        
-        log("⚡ Transforming to frontend mode: primary=\(primaryFileName), others=\(cleanOtherFiles.count)")
         
         var transformedCommand = command
         
@@ -629,7 +609,6 @@ public class BazelAQueryParser: LiteParser {
             transformedCommand += " \(otherFile)"  
         }
         
-        log("✅ Frontend mode transformation complete")
         return transformedCommand
     }
     

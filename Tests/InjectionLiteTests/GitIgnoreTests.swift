@@ -112,4 +112,31 @@ final class GitIgnoreTests: XCTestCase {
         XCTAssertFalse(parser.shouldIgnore(path: "logs/info.txt"))
     }
     
+    func testLeadingSlashDotPatterns() {
+        // Test that patterns like "/.bazel-*" properly match ".bazel-*" directories
+        let gitignoreContent = """
+        /.bazel-*
+        /.git/
+        /.vscode/
+        /build/
+        """
+        
+        let parser = GitIgnoreParser(content: gitignoreContent)
+        
+        // Test that leading slash + dot patterns match hidden directories
+        XCTAssertTrue(parser.shouldIgnore(path: ".bazel-grpc-logs/", isDirectory: true))
+        XCTAssertTrue(parser.shouldIgnore(path: ".bazel-bin/", isDirectory: true))
+        XCTAssertTrue(parser.shouldIgnore(path: ".bazel-out/ios_arm64-dbg/bin/", isDirectory: true))
+        XCTAssertTrue(parser.shouldIgnore(path: ".git/", isDirectory: true))
+        XCTAssertTrue(parser.shouldIgnore(path: ".git/config"))
+        XCTAssertTrue(parser.shouldIgnore(path: ".vscode/", isDirectory: true))
+        
+        // Test that /build/ still matches build/ (no dot normalization needed)
+        XCTAssertTrue(parser.shouldIgnore(path: "build/", isDirectory: true))
+        
+        // Test that source files are not ignored
+        XCTAssertFalse(parser.shouldIgnore(path: "main.swift"))
+        XCTAssertFalse(parser.shouldIgnore(path: ".bazel-other-file.swift")) // Edge case: .bazel- prefix but not matching pattern
+    }
+    
 }
