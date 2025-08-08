@@ -19,42 +19,26 @@ import Popen
 /// Shared utility for resolving development tool binaries with sandbox support
 public class BinaryResolver {
     public static let shared = BinaryResolver()
+    private var resolvedBazelPath: String?
     
     private init() {}
     
     /// Resolve bazel executable path with multi-level fallback
-    public func resolveBazelExecutable(preferred: String = "bazel") -> String? {
-        // Level 1: Try the preferred executable with PATH resolution
-        if let result = Popen(cmd: "which \(preferred)") {
-            let output = result.readAll().trimmingCharacters(in: .whitespacesAndNewlines)
-            if !output.isEmpty && !output.contains("not found") {
-                return output
-            }
+    public func resolveBazelExecutable() throws -> String {
+        if let resolvedBazelPath {
+            return resolvedBazelPath
         }
-        
-        // Level 2: Check for injected environment variable
-        if let injectedPath = getenv("INJECTION_BAZEL_PATH") {
-            let pathString = String(cString: injectedPath)
-            if FileManager.default.fileExists(atPath: pathString) {
-                return pathString
-            }
+        let path = "/bin:/usr/bin:/usr/local/bin:/opt/homebrew/bin"
+        let export = "export PATH='\(path)'; which "
+        let bazelPath = (Popen.system(export+"bazelisk") ??
+                Popen.system(export+"bazel"))?
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        if let bazelPath {
+            resolvedBazelPath = bazelPath
+            return bazelPath
+        } else {
+            throw BazelError.bazelNotFound
         }
-        
-        // Level 3: Try common Bazel installation paths
-        let commonPaths = [
-            "/opt/homebrew/bin/bazel",
-            "/opt/homebrew/bin/bazelisk", 
-            "/usr/local/bin/bazel",
-            "/usr/local/bin/bazelisk"
-        ]
-        
-        for path in commonPaths {
-            if FileManager.default.fileExists(atPath: path) {
-                return path
-            }
-        }
-        
-        return nil
     }
     
     /// Resolve xcrun executable path with multi-level fallback
@@ -121,7 +105,7 @@ public class BazelInterface {
     private let bazelExecutable: String
     private static let sourceToTargetCache = NSCache<NSString, NSString>()
     
-    public init(workspaceRoot: String, bazelExecutable: String = "bazel") throws {
+    public init(workspaceRoot: String) throws {
         // Validate workspace
         let moduleFile = (workspaceRoot as NSString).appendingPathComponent("MODULE.bazel")
         let modulePlainFile = (workspaceRoot as NSString).appendingPathComponent("MODULE")
@@ -136,21 +120,7 @@ public class BazelInterface {
         }
         
         self.workspaceRoot = workspaceRoot
-        self.bazelExecutable = bazelExecutable
-        
-        // Validate bazel executable with helpful error message
-        guard isBazelAvailable() else {
-            // Check if we're in a sandboxed environment
-            if let _ = getenv("INJECTION_BAZEL_PATH") {
-                throw BazelError.bazelNotFound
-            } else if !BinaryResolver.shared.hasBasicToolAccess() {
-                // Provide helpful message for sandboxed environments
-                print("⚠️ InjectionLite: Running in restricted environment (likely Bazel sandbox)")
-                print("   Please set INJECTION_BAZEL_PATH environment variable to the bazel executable path")
-                print("   Example: INJECTION_BAZEL_PATH=/opt/homebrew/bin/bazel")
-            }
-            throw BazelError.bazelNotFound
-        }
+        self.bazelExecutable = try BinaryResolver.shared.resolveBazelExecutable()
     }
     
     // MARK: - Workspace Detection
@@ -177,22 +147,6 @@ public class BazelInterface {
         return nil
     }
 
-    // MARK: - Private Helpers
-    
-    private func isBazelAvailable() -> Bool {
-        // Use shared binary resolver
-        if let resolvedPath = BinaryResolver.shared.resolveBazelExecutable(preferred: bazelExecutable) {
-            // Verify the resolved path actually works by running it from the workspace directory
-            guard let output = Popen.task(exec: resolvedPath,
-                                        arguments: ["version"],
-                                        cd: workspaceRoot) else {
-                return false  
-            }
-            return !output.contains("command not found") && !output.contains("No such file")
-        }
-        return false
-    }
-    
     // MARK: - Cache Management
     
     private func getCachedTarget(for sourcePath: String) -> String? {
