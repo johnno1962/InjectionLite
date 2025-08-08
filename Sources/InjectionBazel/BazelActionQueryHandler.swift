@@ -29,14 +29,6 @@ extension Popen {
 }
 #endif
 
-/// Wrapper class for target arrays to use with NSCache
-private final class TargetArrayWrapper {
-    let targets: [String]
-    init(targets: [String]) {
-        self.targets = targets
-    }
-}
-
 public enum BazelActionQueryError: Error, CustomStringConvertible {
     case workspaceNotFound
     case queryExecutionFailed(String)
@@ -68,14 +60,13 @@ public class BazelActionQueryHandler {
     private let workspaceRoot: String
     private let bazelExecutable: String
     private static let commandCache = NSCache<NSString, NSString>()
-    private static let targetCache = NSCache<NSString, TargetArrayWrapper>()
     private var cachedExecutionRoot: String?
     private var cachedAppTarget: String?
     
-    public init(workspaceRoot: String, bazelExecutable: String = "/opt/homebrew/bin/bazelisk") {
+    public init(workspaceRoot: String) throws {
         self.workspaceRoot = workspaceRoot
         // Resolve the actual bazel executable path with fallback logic
-        self.bazelExecutable = BinaryResolver.shared.resolveBazelExecutable(preferred: bazelExecutable) ?? bazelExecutable
+        self.bazelExecutable = try BinaryResolver.shared.resolveBazelExecutable()
     }
     
     /// Get the currently cached app target
@@ -87,8 +78,6 @@ public class BazelActionQueryHandler {
     
     /// Discover and validate the app target for a given source file
     public func discoverAppTarget(for sourcePath: String) throws -> String {
-        log("🎯 Discovering app target for source: \(sourcePath)")
-        
         // Check cache first
         if let cachedTarget = cachedAppTarget {
             log("💾 Using cached app target: \(cachedTarget)")
@@ -101,23 +90,15 @@ public class BazelActionQueryHandler {
             throw BazelActionQueryError.noTargetsFound("No ios_application targets found in workspace")
         }
         
-        log("🔍 Found \(candidateTargets.count) iOS application targets (sorted shortest package path first): \(candidateTargets)")
-        
         // Test each candidate to see if it generates SwiftCompile actions for this source file
-        for (index, candidate) in candidateTargets.enumerated() {
-            let packagePath = extractPackagePath(from: candidate)
-            let packageDepth = packagePath.isEmpty ? 0 : packagePath.components(separatedBy: "/").count
-            
+        for candidate in candidateTargets {
             do {
-                log("🔍 Testing target \(index + 1)/\(candidateTargets.count): \(candidate) (package depth: \(packageDepth))")
                 let hasActionsForSource = try validateTargetHasActionsForSource(candidate, sourcePath: sourcePath)
                 if hasActionsForSource {
-                    log("✅ Found app target that compiles \(sourcePath): \(candidate) (package depth: \(packageDepth))")
                     cachedAppTarget = candidate
                     return candidate
                 }
             } catch {
-                log("⚠️ Failed to validate target \(candidate) for source \(sourcePath): \(error)")
                 continue
             }
         }
@@ -127,88 +108,33 @@ public class BazelActionQueryHandler {
     
     /// Find compilation command for a given source file using optimized app target approach
     public func findCompilationCommand(for sourcePath: String, appTarget: String? = nil) throws -> String {
-        log("🔍 Finding compilation command for: \(sourcePath)")
-        
         // Check cache first
         let cacheKey = appTarget != nil ? "\(sourcePath):\(appTarget!)" : sourcePath
         if let cachedCommand = getCachedCommand(for: cacheKey) {
-            log("💾 Using cached compilation command")
             return cachedCommand
         }
         
         // If app target is provided, use it directly
         if let appTarget = appTarget {
-            log("🚀 Using provided app target: \(appTarget)")
             return try findCompilationCommandWithAppTarget(for: sourcePath, appTarget: appTarget, cacheKey: cacheKey)
         }
         
         // Auto-discover app target that works for this source file
         do {
             let discoveredTarget = try discoverAppTarget(for: sourcePath)
-            log("🎯 Auto-discovered app target: \(discoveredTarget)")
             let newCacheKey = "\(sourcePath):\(discoveredTarget)"
             return try findCompilationCommandWithAppTarget(for: sourcePath, appTarget: discoveredTarget, cacheKey: newCacheKey)
         } catch {
             log("⚠️ App target discovery failed, falling back to legacy approach: \(error)")
-            return try findCompilationCommandLegacy(for: sourcePath)
+            throw BazelActionQueryError.noCompilationCommandFound("Couldn't find an ios_application that has a compilation action for this file")
         }
-    }
-    
-    /// Legacy compilation command finding (original approach)
-    private func findCompilationCommandLegacy(for sourcePath: String) throws -> String {
-        log("🔄 Using legacy target discovery approach for: \(sourcePath)")
-        
-        // Find all targets that contain this source file
-        let targets = try findTargets(for: sourcePath)
-        guard !targets.isEmpty else {
-            throw BazelActionQueryError.noTargetsFound(sourcePath)
-        }
-        
-        // Sort targets by specificity (longest path first)
-        let sortedTargets = targets.sorted { $0.count < $1.count }
-        
-        // Try each target until we find one that actually includes our source file in its inputs
-        var lastError: BazelActionQueryError?
-        for target in sortedTargets {
-            do {
-                log("🎯 Trying target: \(target)")
-                let commands = try getAllCompilationCommands(for: target, sourcePath: sourcePath)
-                
-                // Look for iOS configuration first (check for ios_ prefix)
-                let iosConfig = commands.first { $0.configuration.hasPrefix("ios_") }
-                if let config = iosConfig {
-                    let index = commands.firstIndex { $0.configuration == config.configuration }! + 1
-                    log("🍎 Found iOS configuration \(index)/\(commands.count): \(config.configuration) for target \(target)")
-                    setCachedCommand(config.command, for: sourcePath)
-                    log("✅ Using iOS compilation command for \(sourcePath) in target: \(target)")
-                    return config.command
-                }
-                
-                // Fallback to first available configuration if no iOS found
-                if let config = commands.first {
-                    log("⚠️ No iOS configuration found, using first available configuration: \(config.configuration) for target \(target)")
-                    setCachedCommand(config.command, for: sourcePath)
-                    log("✅ Using fallback compilation command for \(sourcePath) in target: \(target)")
-                    return config.command
-                }
-                
-            } catch let error as BazelActionQueryError {
-                log("⚠️ Target \(target) doesn't include \(sourcePath) in inputs, trying next...")
-                lastError = error
-                continue
-            }
-        }
-        
-        // If we get here, no target actually included our source file in its inputs
-        throw lastError ?? BazelActionQueryError.noCompilationCommandFound(sourcePath)
     }
     
     /// Optimized compilation command finding using app target dependencies
     private func findCompilationCommandWithAppTarget(for sourcePath: String, appTarget: String, cacheKey: String) throws -> String {
         // Convert absolute path to relative path from workspace root
         let relativePath = try convertToRelativePath(sourcePath)
-        log("🎯 Using optimized aquery: inputs(\(relativePath), deps(\(appTarget)))")
-        
+
         // Use the optimized aquery pattern with relative path
         let query = "mnemonic(\"SwiftCompile\", inputs(\(relativePath), deps(\"\(appTarget)\")))"
         
@@ -232,10 +158,7 @@ public class BazelActionQueryHandler {
         // Look for iOS configuration first (check for ios_ prefix)  
         let iosConfig = compilationCommands.first { $0.configuration.hasPrefix("ios_") }
         if let config = iosConfig {
-            let index = compilationCommands.firstIndex { $0.configuration == config.configuration }! + 1
-            log("🍎 Found iOS configuration \(index)/\(compilationCommands.count): \(config.configuration) for app target \(appTarget)")
             setCachedCommand(config.command, for: cacheKey)
-            log("✅ Using optimized iOS compilation command for \(relativePath)")
             return config.command
         }
         
@@ -248,110 +171,6 @@ public class BazelActionQueryHandler {
         }
         
         throw BazelActionQueryError.noCompilationCommandFound("No valid compilation commands found for \(relativePath) in app target \(appTarget)")
-    }
-    
-    /// Find all targets that contain the given source file
-    public func findTargets(for sourcePath: String) throws -> [String] {
-        log("🎯 Finding targets for source: \(sourcePath)")
-        
-        // Check cache first
-        if let cachedTargets = getCachedTargets(for: sourcePath) {
-            log("💾 Using cached targets: \(cachedTargets)")
-            return cachedTargets
-        }
-        
-        // Convert absolute path to relative path from workspace root
-        let relativePath = try convertToRelativePath(sourcePath)
-        
-        // Find all possible Bazel label representations for this file
-        let possibleLabels = try generatePossibleBazelLabels(for: relativePath)
-        
-        var allTargets: [String] = []
-        
-        // Try each possible label representation until we find targets
-        for label in possibleLabels {
-            log("🔍 Trying Bazel query for label: \(label)")
-            let query = "attr(srcs, \(label), //...)"
-            
-            do {
-                let targets = try executeBazelQuery(query)
-                if !targets.isEmpty {
-                    log("✅ Found \(targets.count) targets for label: \(label)")
-                    allTargets.append(contentsOf: targets)
-                }
-            } catch {
-                log("⚠️ Query failed for label \(label): \(error)")
-                continue
-            }
-        }
-        
-        // Remove duplicates while preserving order
-        let uniqueTargets = Array(NSOrderedSet(array: allTargets)) as! [String]
-        
-        // Cache the results
-        setCachedTargets(uniqueTargets, for: sourcePath)
-        
-        log("✅ Found \(uniqueTargets.count) total unique targets for \(sourcePath)")
-        return uniqueTargets
-    }
-    
-    /// Generate all possible Bazel label representations for a relative file path
-    private func generatePossibleBazelLabels(for relativePath: String) throws -> [String] {
-        log("🏷️ Generating possible Bazel labels for: \(relativePath)")
-        
-        var possibleLabels: [String] = []
-        let pathComponents = relativePath.components(separatedBy: "/")
-        
-        // Walk up the directory tree to find all possible package boundaries
-        for i in 0..<pathComponents.count {
-            let j = pathComponents.count - i
-            let packagePath = pathComponents[0..<j].joined(separator: "/")
-            let remainingPath = pathComponents[j..<pathComponents.count].joined(separator: "/")
-            
-            // Check if this directory has a BUILD file (making it a valid package)
-            let isValidPackage = try hasValidBuildFile(packagePath: packagePath)
-            
-            if isValidPackage {
-                // Generate the Bazel label for this package boundary
-                let bazelLabel: String
-                if packagePath.isEmpty {
-                    // Root package
-                    bazelLabel = remainingPath
-                } else {
-                    // Sub-package - use relative path from this package
-                    bazelLabel = "//\(packagePath):\(remainingPath)"
-                }
-                
-                possibleLabels.append(bazelLabel)
-                log("📦 Valid package found at '\(packagePath.isEmpty ? "<root>" : packagePath)' -> label: \(bazelLabel)")
-            }
-        }
-        
-        // If no valid packages found, fall back to the full relative path
-        if possibleLabels.isEmpty {
-            possibleLabels.append(relativePath)
-            log("⚠️ No BUILD files found, using full relative path: \(relativePath)")
-        }
-        
-        log("🏷️ Generated \(possibleLabels.count) possible labels: \(possibleLabels)")
-        return possibleLabels
-    }
-    
-    /// Check if a directory path has a valid BUILD file
-    private func hasValidBuildFile(packagePath: String) throws -> Bool {
-        let fullPackagePath = packagePath.isEmpty ? workspaceRoot : (workspaceRoot as NSString).appendingPathComponent(packagePath)
-        
-        let buildFilePath = (fullPackagePath as NSString).appendingPathComponent("BUILD")
-        let buildBazelPath = (fullPackagePath as NSString).appendingPathComponent("BUILD.bazel")
-        
-        let hasBuildFile = FileManager.default.fileExists(atPath: buildFilePath) ||
-                          FileManager.default.fileExists(atPath: buildBazelPath)
-        
-        if hasBuildFile {
-            log("✅ Found BUILD file in: \(packagePath.isEmpty ? "<root>" : packagePath)")
-        }
-        
-        return hasBuildFile
     }
     
     // MARK: - Private Implementation
@@ -389,7 +208,6 @@ public class BazelActionQueryHandler {
                 return target1 < target2
             }
         
-        log("🎯 Found \(targets.count) iOS application targets (sorted by package depth): \(targets)")
         return targets
     }
     
@@ -406,11 +224,8 @@ public class BazelActionQueryHandler {
     
     /// Validate that a target has SwiftCompile actions for the specific source file using aquery
     private func validateTargetHasActionsForSource(_ target: String, sourcePath: String) throws -> Bool {
-        log("🔍 Validating target \(target) has SwiftCompile actions for source: \(sourcePath)")
-        
         // Convert absolute path to relative path from workspace root
         let relativePath = try convertToRelativePath(sourcePath)
-        log("📁 Using relative path for aquery: \(relativePath)")
         
         let query = "mnemonic(\"SwiftCompile\", inputs(\"\(relativePath)\", deps(\"\(target)\")))"
         guard let output = Popen.task(exec: bazelExecutable,
@@ -420,7 +235,6 @@ public class BazelActionQueryHandler {
         }
         
         if output.contains("ERROR:") || output.contains("FAILED:") {
-            log("⚠️ Validation aquery failed for \(target) with source \(relativePath): \(output)")
             return false
         }
         
@@ -428,7 +242,6 @@ public class BazelActionQueryHandler {
         let hasActionsForSource = !output.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && 
                                  output.contains("SwiftCompile")
         
-        log(hasActionsForSource ? "✅ Target \(target) has SwiftCompile actions for \(relativePath)" : "❌ Target \(target) has no SwiftCompile actions for \(relativePath)")
         return hasActionsForSource
     }
     
@@ -442,33 +255,6 @@ public class BazelActionQueryHandler {
             .trimmingCharacters(in: CharacterSet(charactersIn: "/"))
         
         return relativePath
-    }
-    
-    private func getAllCompilationCommands(for target: String, sourcePath: String) throws -> [(command: String, configuration: String)] {
-        log("⚙️ Getting compilation command for target: \(target)")
-        
-        // Use aquery to get the compilation action for this target
-        let query = "mnemonic(\"SwiftCompile\", \(target))"
-        
-        guard let output = Popen.task(exec: bazelExecutable,
-                                     arguments: ["aquery", query, "--output=text"],
-                                     cd: workspaceRoot) else {
-            throw BazelActionQueryError.queryExecutionFailed("Failed to execute aquery")
-        }
-        
-        if output.contains("ERROR:") || output.contains("FAILED:") {
-            throw BazelActionQueryError.queryExecutionFailed("AQuery failed: \(output)")
-        }
-        
-        // Parse the textproto output to extract all Swift compilation commands
-        let compilationCommands = try parseAllSwiftCompilationCommands(from: output, sourcePath: sourcePath)
-        
-        guard !compilationCommands.isEmpty else {
-            throw BazelActionQueryError.noCompilationCommandFound("No SwiftCompile actions found")
-        }
-        
-        log("✅ Extracted \(compilationCommands.count) compilation commands")
-        return compilationCommands
     }
     
     private func parseAllSwiftCompilationCommands(from textproto: String, sourcePath: String) throws -> [(command: String, configuration: String)] {
@@ -485,14 +271,15 @@ public class BazelActionQueryHandler {
                 let command = try parseSwiftCompilationCommand(from: actionText, sourcePath: sourcePath)
                 let configuration = extractConfiguration(from: actionText)
                 commands.append((command: command, configuration: configuration))
-                log("✅ Parsed SwiftCompile configuration #\(commands.count): \(configuration)")
             } catch {
-                log("⚠️ Skipping action \(index + 1): \(error)")
                 continue
             }
         }
         
-        log("📊 Successfully parsed \(commands.count) SwiftCompile configurations")
+        if commands.isEmpty {
+            log("⚠️ Couldn't find any compilation command for source file")
+        }
+        
         return commands
     }
     
@@ -676,16 +463,12 @@ public class BazelActionQueryHandler {
             return cached
         }
         
-        log("🔍 Querying Bazel execution root with command: \(bazelExecutable) info execution_root (cd: \(workspaceRoot))")
-        
         guard let output = Popen.task(exec: bazelExecutable,
                                      arguments: ["info", "execution_root"],
                                      cd: workspaceRoot) else {
             log("⚠️ Failed to execute Bazel info execution_root command")
             return nil
         }
-        
-        log("📄 Bazel info execution_root output: '\(output)'")
         
         if output.contains("ERROR:") || output.contains("FAILED:") {
             log("⚠️ Bazel execution root query failed: \(output)")
@@ -698,7 +481,6 @@ public class BazelActionQueryHandler {
             .filter { $0.starts(with: "/private/var/tmp/_bazel") }
             .first.map(String.init) ?? ""
         if !executionRoot.isEmpty {
-            log("✅ Got Bazel execution root: \(executionRoot)")
             cachedExecutionRoot = executionRoot
             return executionRoot
         }
@@ -758,7 +540,6 @@ public class BazelActionQueryHandler {
                                       cd: workspaceRoot) {
                 let sdkPath = output.trimmingCharacters(in: .whitespacesAndNewlines)
                 if !sdkPath.isEmpty && !sdkPath.contains("error") {
-                    log("✅ Resolved __BAZEL_XCODE_SDKROOT__ to: \(sdkPath) (SDK: \(sdk))")
                     return sdkPath
                 }
             }
@@ -782,26 +563,6 @@ public class BazelActionQueryHandler {
         return nil
     }
     
-    private func executeBazelQuery(_ query: String) throws -> [String] {
-        guard let output = Popen.task(exec: bazelExecutable,
-                                     arguments: ["query", query],
-                                     cd: workspaceRoot) else {
-            throw BazelActionQueryError.queryExecutionFailed("Failed to execute query")
-        }
-        
-        if output.contains("ERROR:") || output.contains("FAILED:") {
-            throw BazelActionQueryError.queryExecutionFailed("Query failed: \(output)")
-        }
-        
-        if output.contains("Empty results") {
-            return []
-        }
-        
-        return output.trimmingCharacters(in: CharacterSet.whitespacesAndNewlines)
-            .components(separatedBy: CharacterSet.newlines)
-            .filter { !$0.isEmpty && $0.hasPrefix("//")}
-    }
-    
     // MARK: - Cache Management
     
     private func getCachedCommand(for key: String) -> String? {
@@ -811,16 +572,7 @@ public class BazelActionQueryHandler {
     private func setCachedCommand(_ command: String, for key: String) {
         BazelActionQueryHandler.commandCache.setObject(command as NSString, forKey: key as NSString)
     }
-    
-    private func getCachedTargets(for sourcePath: String) -> [String]? {
-        return BazelActionQueryHandler.targetCache.object(forKey: sourcePath as NSString)?.targets
-    }
-    
-    private func setCachedTargets(_ targets: [String], for sourcePath: String) {
-        let wrapper = TargetArrayWrapper(targets: targets)
-        BazelActionQueryHandler.targetCache.setObject(wrapper, forKey: sourcePath as NSString)
-    }
-    
+
     public func getCacheStats() -> (commands: Int, targets: Int) {
         // Note: NSCache doesn't provide exact count, returning approximate values
         return (0, 0) // NSCache manages its own statistics internally

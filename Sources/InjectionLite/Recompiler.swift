@@ -42,8 +42,7 @@ public struct Recompiler {
         // Check if this is a Bazel workspace
         if let workspaceRoot = BazelInterface.findWorkspaceRoot(containing: source) {
             do {
-                let bazelParser = try BazelAQueryParser(workspaceRoot: workspaceRoot)
-                return bazelParser
+                return try BazelAQueryParser(workspaceRoot: workspaceRoot)
             } catch {
                 log("⚠️ Failed to create BazelAQueryParser: \(error), falling back to LogParser")
             }
