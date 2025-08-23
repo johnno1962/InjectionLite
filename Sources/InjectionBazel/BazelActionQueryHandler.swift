@@ -136,7 +136,7 @@ public class BazelActionQueryHandler {
         let relativePath = try convertToRelativePath(sourcePath)
 
         // Use the optimized aquery pattern with relative path
-        let query = "mnemonic(\"SwiftCompile\", inputs(\(relativePath), deps(\"\(appTarget)\")))"
+        let query = "mnemonic(\"SwiftCompile\", inputs(\"\(relativePath)\", deps(\"\(appTarget)\")))"
         
         guard let output = Popen.task(exec: bazelExecutable,
                                      arguments: ["aquery", query, "--output=text"],
@@ -253,6 +253,7 @@ public class BazelActionQueryHandler {
         
         let relativePath = String(sourcePath.dropFirst(workspaceRoot.count))
             .trimmingCharacters(in: CharacterSet(charactersIn: "/"))
+            .replacingOccurrences(of: "+", with: "\\+")
         
         return relativePath
     }
