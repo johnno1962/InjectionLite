@@ -5,7 +5,7 @@
 //  Bazel build system interface for hot reloading support
 //
 
-#if DEBUG || !SWIFT_PACKAGE
+#if (DEBUG || !SWIFT_PACKAGE) && os(macOS)
 import Foundation
 #if canImport(InjectionImpl)
 import InjectionImpl

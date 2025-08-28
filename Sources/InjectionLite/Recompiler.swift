@@ -39,6 +39,7 @@ public struct Recompiler {
     }
   
     func findParser(forProjectContaining source: String) -> LiteParser {
+        #if os(macOS)
         // Check if this is a Bazel workspace
         if let workspaceRoot = BazelInterface.findWorkspaceRoot(containing: source) {
             do {
@@ -47,6 +48,7 @@ public struct Recompiler {
                 log("⚠️ Failed to create BazelAQueryParser: \(error), falling back to LogParser")
             }
         }
+        #endif
         
         // Fallback to traditional Xcode log parsing
         return LogParser()
