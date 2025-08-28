@@ -7,10 +7,6 @@
 
 #if DEBUG || !SWIFT_PACKAGE
 import Foundation
-#if canImport(InjectionImpl)
-import InjectionImpl
-import DLKitD
-#endif
 #if canImport(PopenD)
 import PopenD
 #else
@@ -19,7 +15,8 @@ import Popen
 
 extension String {
     public var unescape: String {
-        return self[#"\\(.)"#, "$1"]
+        return self.replacingOccurrences(of: #"\\(.)"#, with: "$1",
+                                         options: .regularExpression)
     }
 }
 
@@ -28,6 +25,12 @@ public protocol LiteParser {
                found: inout (logDir: String, scanner: Popen?)?) -> String?
   func prepareFinalCommand(command: String, source: String, objectFile: String, tmpdir: String, injectionNumber: Int) -> String
 }
+
+#if os(macOS)
+#if canImport(InjectionImpl)
+import InjectionImpl
+import DLKitD
+#endif
 
 public class BazelAQueryParser: LiteParser {
     private let workspaceRoot: String
@@ -661,4 +664,5 @@ public class BazelAQueryParser: LiteParser {
     
     
 }
+#endif
 #endif

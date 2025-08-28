@@ -5,7 +5,7 @@
 //  Handles Bazel AQuery operations for extracting Swift compilation commands
 //
 
-#if DEBUG || !SWIFT_PACKAGE
+#if (DEBUG || !SWIFT_PACKAGE) && os(macOS)
 import Foundation
 #if canImport(InjectionImpl)
 import InjectionImpl
