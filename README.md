@@ -26,8 +26,8 @@ the [InjectionIII](https://github.com/johnno1962/InjectionIII)
 README for more details on how it can be used to inject an iOS 
 app or SwiftUI interfaces and how it works its magic.
 
-For the sake of simplicity, this version of injection
-is missing the "Unhiding" functionality from InjectionIII
+For the sake of simplicity, this version of injection is
+missing the "Unhiding" functionality from InjectionIII
 sometimes required to be able to inject Swift code 
 that uses default function arguments.
 

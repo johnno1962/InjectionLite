@@ -35,20 +35,21 @@ open class InjectionBase: NSObject {
         log(APP_NAME+": can only be used in the simulator or unsandboxed macOS")
         #endif
         let home = NSHomeDirectory()
-            .replacingOccurrences(of: #"(/Users/[^/]+).*"#,
-                                  with: "$1", options: .regularExpression)
+            .replacingOccurrences(of: #"(/Users/[^/]+).*"#, with: "$1",
+                                  options: .regularExpression)
         var dirs = [home]
-        if let bazelWorkspace = getenv("BUILD_WORKSPACE_DIRECTORY") {
+        if let bazelWorkspace = getenv(BUILD_WORKSPACE_DIRECTORY) {
             dirs = [String(cString: bazelWorkspace)]
         }
-        let library = home+"/Library"
-        if let extra = getenv(INJECTION_DIRECTORIES) {
+        if let extra = getenv(INJECTION_DIRECTORIES) ??
+                       getenv(INJECTION_PROJECT_ROOT) {
+            let library = home+"/Library"
             dirs = String(cString: extra).components(separatedBy: ",")
                 .map { $0.replacingOccurrences(of: #"^~"#,
                    with: home, options: .regularExpression) } // expand ~ in paths
-            if FileWatcher.derivedLog == nil && dirs.allSatisfy({
-                $0 != home && !$0.hasPrefix(library) }) {
-                log("⚠️ INJECTION_DIRECTORIES should contain ~/Library")
+            if FileWatcher.derivedLog == nil &&
+                dirs.allSatisfy({ $0 != home && !$0.hasPrefix(library) }) {
+                log("⚠️ \(INJECTION_DIRECTORIES) should contain ~/Library")
                 dirs.append(library)
             }
         }
