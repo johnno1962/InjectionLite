@@ -36,6 +36,7 @@ public struct Reloader {
     public static var lastTime = Date.timeIntervalSinceReferenceDate // benchmarking
     public static var unhider: (() -> Void)? // Not currently used.
     public let sweeper = Sweeper() // implements instance level @objc injected()
+    static var staticInits = [String: DLKit.SymbolValue]()
     static var typeSizes = [String: Int]()
     static var loadErrors = [String]()
     static var sizeChanged = false
@@ -102,13 +103,24 @@ public struct Reloader {
             }
         }
         
-        if let symbols = FileSymbols(path: dylib) {
-            let RTLD_DEFAULT = UnsafeMutableRawPointer(bitPattern: -2)
-            for entry in symbols.entries(withSuffix: "N") {
+        Self.preserveStatics = getenv(INJECTION_PRESERVE_STATICS) != nil
+
+        // Check for changes to the size of types
+        if let toload = FileSymbols(path: dylib) {
+            for entry in toload.entries(withSuffix: "N") {
                 let symbol = entry.symbol
                 if Self.typeSizes[symbol] == nil,
-                   let value = dlsym(RTLD_DEFAULT, entry.name) {
+                   let value = dlsym(DLKit.RTLD_DEFAULT, entry.name) {
                     Self.typeSizes[symbol] = sizeof(anyType: value)
+                }
+            }
+            if Self.preserveStatics {
+                for entry in toload.entries(withSuffix: "vau") {
+                    let symbol = entry.symbol
+                    if Self.staticInits[symbol] == nil,
+                        let value = dlsym(DLKit.RTLD_DEFAULT, entry.name) {
+                        Self.staticInits[symbol] = value
+                    }
                 }
             }
         }
@@ -428,8 +440,10 @@ public struct Reloader {
         let rebound = DLKit.appImages.rebind(names: names, values: impls)
 
         // Apply previous interposes to the newly loaded image as well
-        _ = image.rebind(symbols: Array(Self.interposed.keys),
-                         values: Array(Self.interposed.values))
+        _ = image.rebind(symbols: Array(Self.interposed.keys) +
+                                  Array(Self.staticInits.keys),
+                         values: Array(Self.interposed.values) +
+                                 Array(Self.staticInits.values))
         bench("Interposed")
         return rebound
     }
