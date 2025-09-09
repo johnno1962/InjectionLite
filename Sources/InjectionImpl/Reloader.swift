@@ -316,8 +316,11 @@ public struct Reloader {
     }
 
     static var cachedInfo = [SIMP: ImageSymbols.DLKInfo]()
+    static var cacheLock = os_unfair_lock()
     static func cachedGetInfo(image: ImageSymbols,
                               impl: SIMP) -> ImageSymbols.DLKInfo? {
+        os_unfair_lock_lock(&cacheLock)
+        defer { os_unfair_lock_unlock(&cacheLock) }
         if let cached = cachedInfo[impl] {
             return cached
         }

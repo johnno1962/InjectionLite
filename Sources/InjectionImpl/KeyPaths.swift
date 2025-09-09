@@ -16,6 +16,7 @@
 #if DEBUG || !SWIFT_PACKAGE
 import Foundation
 #if canImport(SwiftRegexD)
+import InjectionImplC
 import SwiftRegexD
 import fishhookD
 import DLKitD
@@ -51,7 +52,8 @@ public func hookKeyPaths(original: UnsafeMutableRawPointer,
 //        print("⚠️ Could not find replacement symbol: injection_getKeyPath")
 //        return
 //    }
-    log("ℹ️ Intercepting keypaths for when their types are injected.")
+    log("ℹ️ Intercepting keypaths for when their types are injected. Add an " +
+        "env. var \(INJECTION_NOKEYPATHS) to your scheme to opt-out of this.")
     ViewBodyKeyPaths.save_getKeyPath = autoBitCast(original)
     var keyPathRebinding = [rebinding(name: strdup(ViewBodyKeyPaths.keyPathFuncName),
                                       replacement: replacer, replaced: nil)]
