@@ -230,6 +230,11 @@ public struct Recompiler {
 
     /// Create a dyanmic library from an object file
     mutating func link(objectFile: String, _ compileCommand: String) -> String? {
+        #if canImport(InjectionBazel)
+        // Resolve Xcode Developer directory using the same logic as compilation
+        let resolvedXcodeDev = BinaryResolver.shared.resolveXcodeDeveloperDir()
+        #endif
+
         // Default for Objective-C with Xcode 15.3+
         var sdk = "\(Reloader.xcodeDev)/Platforms/\(Reloader.platform).platform/Developer/SDKs/\(Reloader.platform).sdk"
         // Extract sdk, Xcode path and platform from compilation command
@@ -248,6 +253,16 @@ public struct Recompiler {
         } else if compileCommand.contains(" -o ") {
             log("⚠️ Unable to parse SDK from: \(compileCommand)")
         }
+
+        #if canImport(InjectionBazel)
+        // Use resolved Xcode Developer directory if not extracted from compile command
+        // This ensures consistency between compilation and linking
+        if Reloader.xcodeDev == "/Applications/Xcode.app/Contents/Developer" {
+            Reloader.xcodeDev = resolvedXcodeDev
+            // Update SDK path with resolved developer directory
+            sdk = "\(Reloader.xcodeDev)/Platforms/\(Reloader.platform).platform/Developer/SDKs/\(Reloader.platform).sdk"
+        }
+        #endif
 
         var osSpecific = ""
         switch Reloader.platform {

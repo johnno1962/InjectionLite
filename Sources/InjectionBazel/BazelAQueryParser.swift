@@ -279,9 +279,9 @@ public class BazelAQueryParser: LiteParser {
             }
         }
         
-        // Replace __BAZEL_XCODE_DEVELOPER_DIR__ with actual developer directory  
+        // Replace __BAZEL_XCODE_DEVELOPER_DIR__ with actual developer directory
         if result.contains("__BAZEL_XCODE_DEVELOPER_DIR__") {
-            let developerDir = "/Applications/Xcode.app/Contents/Developer"
+            let developerDir = BinaryResolver.shared.resolveXcodeDeveloperDir()
             result = result.replacingOccurrences(of: "__BAZEL_XCODE_DEVELOPER_DIR__", with: developerDir)
         }
         
