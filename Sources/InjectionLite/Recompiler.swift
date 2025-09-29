@@ -232,12 +232,20 @@ public struct Recompiler {
     mutating func link(objectFile: String, _ compileCommand: String) -> String? {
         #if canImport(InjectionBazel)
         // Resolve Xcode Developer directory using the same logic as compilation
+        // Do this first to ensure consistent behavior
         let resolvedXcodeDev = BinaryResolver.shared.resolveXcodeDeveloperDir()
+
+        // Initialize with resolved path to ensure consistency
+        // This will be overridden if we can extract from compile command
+        if Reloader.xcodeDev == "/Applications/Xcode.app/Contents/Developer" {
+            Reloader.xcodeDev = resolvedXcodeDev
+        }
         #endif
 
         // Default for Objective-C with Xcode 15.3+
         var sdk = "\(Reloader.xcodeDev)/Platforms/\(Reloader.platform).platform/Developer/SDKs/\(Reloader.platform).sdk"
         // Extract sdk, Xcode path and platform from compilation command
+        // This takes precedence over resolved path since it's from the actual compile command
         if let match = Self.parsePlatform.firstMatch(in: compileCommand,
             options: [], range: NSMakeRange(0, compileCommand.utf16.count)) {
             func extract(group: Int, into: inout String) {
@@ -252,17 +260,11 @@ public struct Recompiler {
             extract(group: 4, into: &Reloader.platform)
         } else if compileCommand.contains(" -o ") {
             log("⚠️ Unable to parse SDK from: \(compileCommand)")
+            #if canImport(InjectionBazel)
+            // If we can't parse from compile command, ensure SDK uses resolved path
+            sdk = "\(resolvedXcodeDev)/Platforms/\(Reloader.platform).platform/Developer/SDKs/\(Reloader.platform).sdk"
+            #endif
         }
-
-        #if canImport(InjectionBazel)
-        // Use resolved Xcode Developer directory if not extracted from compile command
-        // This ensures consistency between compilation and linking
-        if Reloader.xcodeDev == "/Applications/Xcode.app/Contents/Developer" {
-            Reloader.xcodeDev = resolvedXcodeDev
-            // Update SDK path with resolved developer directory
-            sdk = "\(Reloader.xcodeDev)/Platforms/\(Reloader.platform).platform/Developer/SDKs/\(Reloader.platform).sdk"
-        }
-        #endif
 
         var osSpecific = ""
         switch Reloader.platform {
