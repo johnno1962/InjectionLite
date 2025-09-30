@@ -72,7 +72,7 @@ public class BinaryResolver {
     public func hasBasicToolAccess() -> Bool {
         // Try to access common development tools
         let basicTools = ["which", "ls", "echo"]
-        
+
         for tool in basicTools {
             if let result = Popen(cmd: "\(tool) --version") {
                 let output = result.readAll()
@@ -81,8 +81,33 @@ public class BinaryResolver {
                 }
             }
         }
-        
+
         return false
+    }
+
+    /// Resolve Xcode Developer directory with multi-level fallback
+    /// This ensures consistent Xcode version usage across compilation and linking
+    public func resolveXcodeDeveloperDir() -> String {
+        // Level 1: Check DEVELOPER_DIR environment variable
+        if let developerDir = getenv("DEVELOPER_DIR") {
+            let pathString = String(cString: developerDir)
+            if FileManager.default.fileExists(atPath: pathString) {
+                return pathString
+            }
+        }
+
+        // Level 2: Use xcode-select -p
+        if let result = Popen(cmd: "xcode-select -p") {
+            let output = result.readAll().trimmingCharacters(in: .whitespacesAndNewlines)
+            if !output.isEmpty && !output.contains("not found") && !output.contains("error") {
+                if FileManager.default.fileExists(atPath: output) {
+                    return output
+                }
+            }
+        }
+
+        // Level 3: Fall back to default Xcode location
+        return "/Applications/Xcode.app/Contents/Developer"
     }
 }
 
