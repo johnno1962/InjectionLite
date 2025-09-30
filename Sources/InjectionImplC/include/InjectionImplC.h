@@ -40,6 +40,9 @@
 /// IP or hostname of developer's machine for connecting from device.
 #define INJECTION_HOST "INJECTION_HOST"
 
+/// Notification posted with injection timing metrics.
+#define INJECTION_METRICS_NOTIFICATION "INJECTION_METRICS_NOTIFICATION"
+
 @interface NSObject(InjectionBoot)
 + (BOOL)InjectionBoot_inPreview;
 + (void)runXCTestCase:(Class)aTestCase;
