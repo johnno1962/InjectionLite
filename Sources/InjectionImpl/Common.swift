@@ -63,6 +63,9 @@ extension Reloader {
     // Defaults for Xcode location and platform
     public static var xcodeDev = "/Applications/Xcode.app/Contents/Developer"
     public static var platform = "iPhoneSimulator"
+    public static var sysroot =
+        "\(xcodeDev)/Platforms/\(platform).platform/Developer/SDKs/\(platform).sdk"
+    public static var osSpecific = ""
 
     public static var optionsToRemove = #"(-(pch-output-dir|supplementary-output-file-map|emit-((reference-)?dependencies|const-values)|serialize-diagnostics|index-(store|unit-output))(-path)?|(-validate-clang-modules-once )?-clang-build-session-file|-Xcc -ivfsstatcache -Xcc)"#,
         typeCheckLimit = "-warn-long-expression-type-checking=150",

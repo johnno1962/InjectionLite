@@ -161,7 +161,8 @@ public struct Recompiler {
             return objectFile
         }
 
-        guard let dylib = link(objectFile: objectFile, command) else {
+        Self.linkerParams(from: command)
+        guard let dylib = link(objectFile: objectFile) else {
             log("❌ Linking failed")
             return nil
         }
@@ -228,10 +229,9 @@ public struct Recompiler {
     public var arch = "x86_64"
     #endif
 
-    /// Create a dyanmic library from an object file
-    mutating func link(objectFile: String, _ compileCommand: String) -> String? {
+    static func linkerParams(from compileCommand: String) {
         // Default for Objective-C with Xcode 15.3+
-        var sdk = "\(Reloader.xcodeDev)/Platforms/\(Reloader.platform).platform/Developer/SDKs/\(Reloader.platform).sdk"
+        Reloader.sysroot = "\(Reloader.xcodeDev)/Platforms/\(Reloader.platform).platform/Developer/SDKs/\(Reloader.platform).sdk"
         // Extract sdk, Xcode path and platform from compilation command
         if let match = Self.parsePlatform.firstMatch(in: compileCommand,
             options: [], range: NSMakeRange(0, compileCommand.utf16.count)) {
@@ -242,7 +242,7 @@ public struct Recompiler {
                                               options: .regularExpression)
                 }
             }
-            extract(group: 1, into: &sdk)
+            extract(group: 1, into: &Reloader.sysroot)
             extract(group: 2, into: &Reloader.xcodeDev)
             extract(group: 4, into: &Reloader.platform)
         } else if compileCommand.contains(" -o ") {
@@ -259,7 +259,7 @@ public struct Recompiler {
             #endif
         }
 
-        var osSpecific = ""
+        let osSpecific: String
         switch Reloader.platform {
         case "iPhoneSimulator":
             osSpecific = "-mios-simulator-version-min=9.0"
@@ -274,25 +274,29 @@ public struct Recompiler {
                 .replacingOccurrences(of: #"^.*( -target \S+).*$"#,
                                       with: "$1", options: .regularExpression)
             osSpecific = "-mmacosx-version-min=10.11"+target
-        case "XRSimulator": fallthrough case "XROS":
-            osSpecific = ""
+        case "XRSimulator": fallthrough case "XROS": fallthrough
         default:
+            osSpecific = ""
             log("⚠️ Invalid platform \(Reloader.platform)")
             // -Xlinker -bundle_loader -Xlinker \"\(Bundle.main.executablePath!)\""
         }
+        Reloader.osSpecific = osSpecific
+    }
 
+    /// Create a dyanmic library from an object file
+    mutating func link(objectFile: String) -> String? {
         let dylib = tmpbase+".dylib"
         let toolchain = Reloader.xcodeDev+"/Toolchains/XcodeDefault.xctoolchain"
         let frameworks = Bundle.main.privateFrameworksPath ?? "/tmp"
         let linkCommand = """
             "\(toolchain)/usr/bin/clang" -arch "\(arch)" \
-                -Xlinker -dylib -isysroot "__PLATFORM__" \
-                -L"\(toolchain)/usr/lib/swift/\(Reloader.platform.lowercased())" \(osSpecific) \
+                -Xlinker -dylib -isysroot "__PLATFORM__" \(Reloader.osSpecific) \
+                -L"\(toolchain)/usr/lib/swift/\(Reloader.platform.lowercased())" \
                 -undefined dynamic_lookup -dead_strip -Xlinker -objc_abi_version \
                 -Xlinker 2 -Xlinker -interposable -fobjc-arc \
                 -fprofile-instr-generate \(objectFile) -L "\(frameworks)" -F "\(frameworks)" \
                 -rpath "\(frameworks)" -o \"\(dylib)\"
-            """.replacingOccurrences(of: "__PLATFORM__", with: sdk)
+            """.replacingOccurrences(of: "__PLATFORM__", with: Reloader.sysroot)
 
         if let errors = Popen.system(linkCommand, errors: true) {
             log(errors, prefix: "")

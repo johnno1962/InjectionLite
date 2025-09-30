@@ -23,7 +23,7 @@ import DLKitD
 public struct Sweeper {
     static var sweepWarned = false
     static let injectedSEL = #selector(SwiftInjected.injected)
-    let notification = Notification.Name("INJECTION_BUNDLE_NOTIFICATION")
+    let notification = Notification.Name(INJECTION_BUNDLE_NOTIFICATION)
     let testQueue = DispatchQueue(label: "INTestQueue")
 
     public func sweepAndRunTests(image: ImageSymbols,

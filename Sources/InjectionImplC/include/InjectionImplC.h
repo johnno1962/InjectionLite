@@ -40,6 +40,8 @@
 /// IP or hostname of developer's machine for connecting from device.
 #define INJECTION_HOST "INJECTION_HOST"
 
+/// Notification on injection.
+#define INJECTION_BUNDLE_NOTIFICATION "INJECTION_BUNDLE_NOTIFICATION"
 /// Notification posted with injection timing metrics.
 #define INJECTION_METRICS_NOTIFICATION "INJECTION_METRICS_NOTIFICATION"
 
