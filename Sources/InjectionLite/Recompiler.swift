@@ -230,22 +230,9 @@ public struct Recompiler {
 
     /// Create a dyanmic library from an object file
     mutating func link(objectFile: String, _ compileCommand: String) -> String? {
-        #if canImport(InjectionBazel)
-        // Resolve Xcode Developer directory using the same logic as compilation
-        // Do this first to ensure consistent behavior
-        let resolvedXcodeDev = BinaryResolver.shared.resolveXcodeDeveloperDir()
-
-        // Initialize with resolved path to ensure consistency
-        // This will be overridden if we can extract from compile command
-        if Reloader.xcodeDev == "/Applications/Xcode.app/Contents/Developer" {
-            Reloader.xcodeDev = resolvedXcodeDev
-        }
-        #endif
-
         // Default for Objective-C with Xcode 15.3+
         var sdk = "\(Reloader.xcodeDev)/Platforms/\(Reloader.platform).platform/Developer/SDKs/\(Reloader.platform).sdk"
         // Extract sdk, Xcode path and platform from compilation command
-        // This takes precedence over resolved path since it's from the actual compile command
         if let match = Self.parsePlatform.firstMatch(in: compileCommand,
             options: [], range: NSMakeRange(0, compileCommand.utf16.count)) {
             func extract(group: Int, into: inout String) {
@@ -261,7 +248,13 @@ public struct Recompiler {
         } else if compileCommand.contains(" -o ") {
             log("⚠️ Unable to parse SDK from: \(compileCommand)")
             #if canImport(InjectionBazel)
-            // If we can't parse from compile command, ensure SDK uses resolved path
+            // Only resolve when we can't extract from compile command
+            // This avoids unnecessary processing for the common case
+            let resolvedXcodeDev = BinaryResolver.shared.resolveXcodeDeveloperDir()
+            if Reloader.xcodeDev == "/Applications/Xcode.app/Contents/Developer" {
+                Reloader.xcodeDev = resolvedXcodeDev
+            }
+            // Use resolved path for SDK construction
             sdk = "\(resolvedXcodeDev)/Platforms/\(Reloader.platform).platform/Developer/SDKs/\(Reloader.platform).sdk"
             #endif
         }
