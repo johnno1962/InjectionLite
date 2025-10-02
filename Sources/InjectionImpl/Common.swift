@@ -58,14 +58,22 @@ extension Reloader {
     #else
     static let sdk = "iOS"
     #endif
+    #if arch(arm64)
+    static var arch = "arm64"
+    #elseif arch(arm)
+    static var arch = "armv7"
+    #elseif arch(x86_64)
+    static var arch = "x86_64"
+    #endif
     public static let appName = Bundle.main.executableURL?.lastPathComponent ?? "Unknown"
     public static var cacheFile = "/tmp/\(appName)_\(sdk)_builds.plist"
-    // Defaults for Xcode location and platform
+    
+    // Defaults for Xcode location and platform for linking
     public static var xcodeDev = "/Applications/Xcode.app/Contents/Developer"
     public static var platform = "iPhoneSimulator"
     public static var sysroot =
         "\(xcodeDev)/Platforms/\(platform).platform/Developer/SDKs/\(platform).sdk"
-    public static var osSpecific = ""
+    public static var linkCommand = ""
 
     public static var optionsToRemove = #"(-(pch-output-dir|supplementary-output-file-map|emit-((reference-)?dependencies|const-values)|serialize-diagnostics|index-(store|unit-output))(-path)?|(-validate-clang-modules-once )?-clang-build-session-file|-Xcc -ivfsstatcache -Xcc)"#,
         typeCheckLimit = "-warn-long-expression-type-checking=150",

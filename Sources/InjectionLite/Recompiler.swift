@@ -110,7 +110,7 @@ public struct Recompiler {
             tmpdir: tmpdir,
             injectionNumber: Reloader.injectionNumber
         ) + " \(benchmark)"
-        
+
         // Time the compilation step
         let compilationStartTime = Date.timeIntervalSinceReferenceDate
         while let errors = Popen.system(finalCommand, errors: nil) {
@@ -135,7 +135,7 @@ public struct Recompiler {
             let wasCached = longTermCache[cacheKey] != nil
             longTermCache[cacheKey] = nil
             writeToCache()
-            if wasCached {
+            if wasCached { // retry once
                 return recompile(source: source, platformFilter:
                                     platformFilter, dylink: dylink)
             }
@@ -157,11 +157,12 @@ public struct Recompiler {
             longTermCache[cacheKey] = command
             writeToCache()
         }
+        
+        Self.extractLinkCommand(from: finalCommand)
         if !dylink {
             return objectFile
         }
 
-        Self.linkerParams(from: command)
         guard let dylib = link(objectFile: objectFile) else {
             log("❌ Linking failed")
             return nil
@@ -221,19 +222,11 @@ public struct Recompiler {
     static let parsePlatform = try! NSRegularExpression(pattern:
         #"-(?:isysroot|sdk)(?: |"\n")((\#(fileNameRegex)/Contents/Developer)/Platforms/(\w+)\.platform\#(fileNameRegex)\#\.sdk)"#)
 
-    #if arch(arm64)
-    public var arch = "arm64"
-    #elseif arch(arm)
-    public var arch = "armv7"
-    #elseif arch(x86_64)
-    public var arch = "x86_64"
-    #endif
-
-    static func linkerParams(from compileCommand: String) {
+    static func extractLinkCommand(from compileCommand: String) {
         // Default for Objective-C with Xcode 15.3+
         Reloader.sysroot = "\(Reloader.xcodeDev)/Platforms/\(Reloader.platform).platform/Developer/SDKs/\(Reloader.platform).sdk"
         // Extract sdk, Xcode path and platform from compilation command
-        if let match = Self.parsePlatform.firstMatch(in: compileCommand,
+        if let match = parsePlatform.firstMatch(in: compileCommand,
             options: [], range: NSMakeRange(0, compileCommand.utf16.count)) {
             func extract(group: Int, into: inout String) {
                 if let range = Range(match.range(at: group), in: compileCommand) {
@@ -280,27 +273,27 @@ public struct Recompiler {
             log("⚠️ Invalid platform \(Reloader.platform)")
             // -Xlinker -bundle_loader -Xlinker \"\(Bundle.main.executablePath!)\""
         }
-        Reloader.osSpecific = osSpecific
+        
+        let toolchain = Reloader.xcodeDev+"/Toolchains/XcodeDefault.xctoolchain"
+        let frameworks = Bundle.main.privateFrameworksPath ?? "/tmp"
+        Reloader.linkCommand = """
+            "\(toolchain)/usr/bin/clang" -arch "\(Reloader.arch)" \
+                -Xlinker -dylib -isysroot "\(Reloader.sysroot)" \(osSpecific) \
+                -L"\(toolchain)/usr/lib/swift/\(Reloader.platform.lowercased())" \
+                -undefined dynamic_lookup -dead_strip -Xlinker -objc_abi_version \
+                -Xlinker 2 -Xlinker -interposable -fobjc-arc \
+                -fprofile-instr-generate -L "\(frameworks)" -F "\(frameworks)" \
+                -rpath "\(frameworks)" -rpath /usr/lib/swift \
+                -rpath "\(toolchain)/usr/lib/swift-5.5/\(Reloader.platform.lowercased())"
+            """
     }
 
     /// Create a dyanmic library from an object file
     mutating func link(objectFile: String) -> String? {
         let dylib = tmpbase+".dylib"
-        let toolchain = Reloader.xcodeDev+"/Toolchains/XcodeDefault.xctoolchain"
-        let frameworks = Bundle.main.privateFrameworksPath ?? "/tmp"
-        let linkCommand = """
-            "\(toolchain)/usr/bin/clang" -arch "\(arch)" \
-                -Xlinker -dylib -isysroot "__PLATFORM__" \(Reloader.osSpecific) \
-                -L"\(toolchain)/usr/lib/swift/\(Reloader.platform.lowercased())" \
-                -undefined dynamic_lookup -dead_strip -Xlinker -objc_abi_version \
-                -Xlinker 2 -Xlinker -interposable -fobjc-arc \
-                -fprofile-instr-generate \(objectFile) -L "\(frameworks)" -F "\(frameworks)" \
-                -rpath "\(frameworks)" -o \"\(dylib)\"
-            """.replacingOccurrences(of: "__PLATFORM__", with: Reloader.sysroot)
-
+        let linkCommand = Reloader.linkCommand + " \(objectFile) -o \"\(dylib)\""
         if let errors = Popen.system(linkCommand, errors: true) {
-            log(errors, prefix: "")
-            log("⚠️ Linking failed")
+            log("⚠️ Linking failed:\n\(linkCommand)\nerrors:\n"+errors)
             return nil
         }
 
