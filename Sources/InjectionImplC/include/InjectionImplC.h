@@ -35,6 +35,8 @@
 #define INJECTION_KEYPATHS "INJECTION_KEYPATHS"
 /// Verbose logging of steps binding injected code into your app.
 #define INJECTION_DETAIL "INJECTION_DETAIL"
+/// Set bazel target to optimize source to bazel target matching
+#define INJECTION_BAZEL_TARGET "INJECTION_BAZEL_TARGET"
 /// Enable selected benchmarking of some operations.
 #define INJECTION_BENCH "INJECTION_BENCH"
 /// IP or hostname of developer's machine for connecting from device.
