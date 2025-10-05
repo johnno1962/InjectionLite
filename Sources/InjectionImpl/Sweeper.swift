@@ -90,8 +90,8 @@ public struct Sweeper {
                         method, \(APP_NAME) will perform a "sweep" of live \
                         instances to determine which objects to message. \
                         If this fails, subscribe to the notification \
-                        "INJECTION_BUNDLE_NOTIFICATION" instead. Set an env var \
-                        INJECTION_SWEEP_DETAIL in your scheme for more information.
+                        "\(INJECTION_BUNDLE_NOTIFICATION)" instead. Set an env var \
+                        \(INJECTION_SWEEP_DETAIL) in your scheme for more information.
                         \(APP_PREFIX)(note: notification may not arrive on the main thread)
                         """)
                     Self.sweepWarned = true
