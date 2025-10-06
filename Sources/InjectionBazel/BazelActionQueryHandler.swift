@@ -61,7 +61,7 @@ public class BazelActionQueryHandler {
     private let bazelExecutable: String
     private static let commandCache = NSCache<NSString, NSString>()
     private var cachedExecutionRoot: String?
-    private var cachedAppTarget: String?
+    public static var cachedAppTarget: String?
     
     public init(workspaceRoot: String) throws {
         self.workspaceRoot = workspaceRoot
@@ -71,7 +71,7 @@ public class BazelActionQueryHandler {
     
     /// Get the currently cached app target
     public var currentAppTarget: String? {
-        return cachedAppTarget
+        return Self.cachedAppTarget
     }
     
     // MARK: - Public Interface
@@ -79,7 +79,7 @@ public class BazelActionQueryHandler {
     /// Discover and validate the app target for a given source file
     public func discoverAppTarget(for sourcePath: String) throws -> String {
         // Check cache first
-        if let cachedTarget = cachedAppTarget {
+        if let cachedTarget = Self.cachedAppTarget {
             log("💾 Using cached app target: \(cachedTarget)")
             return cachedTarget
         }
@@ -95,7 +95,7 @@ public class BazelActionQueryHandler {
             do {
                 let hasActionsForSource = try validateTargetHasActionsForSource(candidate, sourcePath: sourcePath)
                 if hasActionsForSource {
-                    cachedAppTarget = candidate
+                    Self.cachedAppTarget = candidate
                     return candidate
                 }
             } catch {
