@@ -240,16 +240,16 @@ public struct Recompiler {
             extract(group: 4, into: &Reloader.platform)
         } else if compileCommand.contains(" -o ") {
             log("⚠️ Unable to parse SDK from: \(compileCommand)")
-            #if canImport(InjectionBazel)
+            #if canImport(InjectionBazel) && os(macOS)
             // Only resolve when we can't extract from compile command
             // This avoids unnecessary processing for the common case
             let resolvedXcodeDev = BinaryResolver.shared.resolveXcodeDeveloperDir()
             if Reloader.xcodeDev == "/Applications/Xcode.app/Contents/Developer" {
                 Reloader.xcodeDev = resolvedXcodeDev
             }
-            // Use resolved path for SDK construction
-            sdk = "\(resolvedXcodeDev)/Platforms/\(Reloader.platform).platform/Developer/SDKs/\(Reloader.platform).sdk"
             #endif
+            // Use resolved path for SDK construction
+            Reloader.sysroot = "\(Reloader.xcodeDev)/Platforms/\(Reloader.platform).platform/Developer/SDKs/\(Reloader.platform).sdk"
         }
 
         let osSpecific: String

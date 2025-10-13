@@ -59,11 +59,11 @@ extension Reloader {
     static let sdk = "iOS"
     #endif
     #if arch(arm64)
-    static var arch = "arm64"
+    public static var arch = "arm64"
     #elseif arch(arm)
-    static var arch = "armv7"
+    public static var arch = "armv7"
     #elseif arch(x86_64)
-    static var arch = "x86_64"
+    public static var arch = "x86_64"
     #endif
     public static let appName = Bundle.main.executableURL?.lastPathComponent ?? "Unknown"
     public static var cacheFile = "/tmp/\(appName)_\(sdk)_builds.plist"
