@@ -68,6 +68,18 @@ extension Reloader {
     public static let appName = Bundle.main.executableURL?.lastPathComponent ?? "Unknown"
     public static var cacheFile = "/tmp/\(appName)_\(sdk)_builds.plist"
     
+    public static var optionsToRemove = #"(-(pch-output-dir|supplementary-output-file-map|emit-((reference-)?dependencies|const-values)|serialize-diagnostics|index-(store|unit-output))(-path)?|(-validate-clang-modules-once )?-clang-build-session-file|-Xcc -ivfsstatcache -Xcc)"#,
+        typeCheckLimit = "-warn-long-expression-type-checking=150",
+        typeCheckRegex = #"(?<=/)\w+\.swift:\d+:\d+: warning: expression took \d+ms to type-check.*"#
+
+    /// Regex for path argument, perhaps containg escaped spaces
+    public static let argumentRegex = #"[^\s\\]*(?:\\.[^\s\\]*)*"#
+    /// Regex to extract filename base, perhaps containg escaped spaces
+    public static let fileNameRegex = #"/(\#(argumentRegex))\.\w+"#
+    /// Parse -sdk argument to extract sdk, Xcode path, platform
+    static let parsePlatform = try! NSRegularExpression(pattern:
+        #"-(?:isysroot|sdk)(?: |"\n")((\#(fileNameRegex)/Contents/Developer)/Platforms/(\w+)\.platform\#(fileNameRegex)\#\.sdk)"#)
+
     // Defaults for Xcode location and platform for linking
     public static var xcodeDev = "/Applications/Xcode.app/Contents/Developer"
     public static var platform = "iPhoneSimulator"
@@ -75,9 +87,71 @@ extension Reloader {
         "\(xcodeDev)/Platforms/\(platform).platform/Developer/SDKs/\(platform).sdk"
     public static var linkCommand = ""
 
-    public static var optionsToRemove = #"(-(pch-output-dir|supplementary-output-file-map|emit-((reference-)?dependencies|const-values)|serialize-diagnostics|index-(store|unit-output))(-path)?|(-validate-clang-modules-once )?-clang-build-session-file|-Xcc -ivfsstatcache -Xcc)"#,
-        typeCheckLimit = "-warn-long-expression-type-checking=150",
-        typeCheckRegex = #"(?<=/)\w+\.swift:\d+:\d+: warning: expression took \d+ms to type-check.*"#
+    public static func extractLinkCommand(from compileCommand: String) {
+        // Default for Objective-C with Xcode 15.3+
+        sysroot = "\(xcodeDev)/Platforms/\(platform).platform/Developer/SDKs/\(platform).sdk"
+        // Extract sdk, Xcode path and platform from compilation command
+        if let match = parsePlatform.firstMatch(in: compileCommand,
+            options: [], range: NSMakeRange(0, compileCommand.utf16.count)) {
+            func extract(group: Int, into: inout String) {
+                if let range = Range(match.range(at: group), in: compileCommand) {
+                    into = compileCommand[range]
+                        .replacingOccurrences(of: #"\\(.)"#, with: "$1",
+                                              options: .regularExpression)
+                }
+            }
+            extract(group: 1, into: &sysroot)
+            extract(group: 2, into: &xcodeDev)
+            extract(group: 4, into: &platform)
+        } else if compileCommand.contains(" -o ") {
+            log("⚠️ Unable to parse SDK from: \(compileCommand)")
+            #if canImport(InjectionBazel) && os(macOS)
+            // Only resolve when we can't extract from compile command
+            // This avoids unnecessary processing for the common case
+            let resolvedXcodeDev = BinaryResolver.shared.resolveXcodeDeveloperDir()
+            if xcodeDev == "/Applications/Xcode.app/Contents/Developer" {
+                xcodeDev = resolvedXcodeDev
+            }
+            #endif
+            // Use resolved path for SDK construction
+            sysroot = "\(xcodeDev)/Platforms/\(platform).platform/Developer/SDKs/\(platform).sdk"
+        }
+
+        let osSpecific: String
+        switch platform {
+        case "iPhoneSimulator":
+            osSpecific = "-mios-simulator-version-min=9.0"
+        case "iPhoneOS":
+            osSpecific = "-miphoneos-version-min=9.0"
+        case "AppleTVSimulator":
+            osSpecific = "-mtvos-simulator-version-min=9.0"
+        case "AppleTVOS":
+            osSpecific = "-mtvos-version-min=9.0"
+        case "MacOSX":
+            let target = compileCommand
+                .replacingOccurrences(of: #"^.*( -target \S+).*$"#,
+                                      with: "$1", options: .regularExpression)
+            osSpecific = "-mmacosx-version-min=10.11"+target
+        case "XRSimulator": fallthrough case "XROS": fallthrough
+        default:
+            osSpecific = ""
+            log("⚠️ Invalid platform \(platform)")
+            // -Xlinker -bundle_loader -Xlinker \"\(Bundle.main.executablePath!)\""
+        }
+        
+        let toolchain = xcodeDev+"/Toolchains/XcodeDefault.xctoolchain"
+        let frameworks = Bundle.main.privateFrameworksPath ?? "/tmp"
+        Self.linkCommand = """
+            "\(toolchain)/usr/bin/clang" -arch "\(arch)" \
+                -Xlinker -dylib -isysroot "\(sysroot)" \(osSpecific) \
+                -L"\(toolchain)/usr/lib/swift/\(platform.lowercased())" \
+                -undefined dynamic_lookup -dead_strip -Xlinker -objc_abi_version \
+                -Xlinker 2 -Xlinker -interposable -fobjc-arc \
+                -fprofile-instr-generate -L "\(frameworks)" -F "\(frameworks)" \
+                -rpath "\(frameworks)" -rpath /usr/lib/swift \
+                -rpath "\(toolchain)/usr/lib/swift-5.5/\(platform.lowercased())"
+            """
+    }
 
     /// A way to determine if a file being injected is an XCTest
     public static func injectingXCTest(in dylib: String) -> Bool {

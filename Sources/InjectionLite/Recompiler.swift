@@ -72,7 +72,7 @@ public struct Recompiler {
             return nil
         }
 
-        let filelistRegex = #" -filelist (\#(Recompiler.argumentRegex))"#
+        let filelistRegex = #" -filelist (\#(Reloader.argumentRegex))"#
         if let filelistPath = (command[filelistRegex] as String?)?.unescape,
            !FileManager.default.fileExists(atPath: filelistPath) {
             if scanned == nil,
@@ -150,7 +150,7 @@ public struct Recompiler {
         log(String(format: "⚡ Compiled in %.0fms", compilationDuration * 1000))
 
         if let frameworksArg: String = command[
-            " -F (\(Self.argumentRegex)/PackageFrameworks) "] {
+            " -F (\(Reloader.argumentRegex)/PackageFrameworks) "] {
             Self.packageFrameworks = frameworksArg[#"\\(.)"#, "$1"]
         }
         if longTermCache[cacheKey] as? String != command {
@@ -158,7 +158,7 @@ public struct Recompiler {
             writeToCache()
         }
         
-        Self.extractLinkCommand(from: finalCommand)
+        Reloader.extractLinkCommand(from: finalCommand)
         if !dylink {
             return objectFile
         }
@@ -194,7 +194,7 @@ public struct Recompiler {
         let sourceName = URL(fileURLWithPath: source).lastPathComponent
         while let line = scanner?.readLine() {
             if let mapFile = (line[
-                #" -output-file-map (\#(Self.argumentRegex))"#] as String?)?.unescape {
+                #" -output-file-map (\#(Reloader.argumentRegex))"#] as String?)?.unescape {
                let data = try Data(contentsOf: URL(fileURLWithPath: mapFile))
                 guard let map = try JSONSerialization.jsonObject(with: data)
                         as? [String: Any] else { continue }
@@ -213,79 +213,6 @@ public struct Recompiler {
                 break
             }
         }
-    }
-
-    /// Regex for path argument, perhaps containg escaped spaces
-    static let argumentRegex = #"[^\s\\]*(?:\\.[^\s\\]*)*"#
-    /// Regex to extract filename base, perhaps containg escaped spaces
-    static let fileNameRegex = #"/(\#(argumentRegex))\.\w+"#
-    static let parsePlatform = try! NSRegularExpression(pattern:
-        #"-(?:isysroot|sdk)(?: |"\n")((\#(fileNameRegex)/Contents/Developer)/Platforms/(\w+)\.platform\#(fileNameRegex)\#\.sdk)"#)
-
-    static func extractLinkCommand(from compileCommand: String) {
-        // Default for Objective-C with Xcode 15.3+
-        Reloader.sysroot = "\(Reloader.xcodeDev)/Platforms/\(Reloader.platform).platform/Developer/SDKs/\(Reloader.platform).sdk"
-        // Extract sdk, Xcode path and platform from compilation command
-        if let match = parsePlatform.firstMatch(in: compileCommand,
-            options: [], range: NSMakeRange(0, compileCommand.utf16.count)) {
-            func extract(group: Int, into: inout String) {
-                if let range = Range(match.range(at: group), in: compileCommand) {
-                    into = compileCommand[range]
-                        .replacingOccurrences(of: #"\\(.)"#, with: "$1",
-                                              options: .regularExpression)
-                }
-            }
-            extract(group: 1, into: &Reloader.sysroot)
-            extract(group: 2, into: &Reloader.xcodeDev)
-            extract(group: 4, into: &Reloader.platform)
-        } else if compileCommand.contains(" -o ") {
-            log("⚠️ Unable to parse SDK from: \(compileCommand)")
-            #if canImport(InjectionBazel) && os(macOS)
-            // Only resolve when we can't extract from compile command
-            // This avoids unnecessary processing for the common case
-            let resolvedXcodeDev = BinaryResolver.shared.resolveXcodeDeveloperDir()
-            if Reloader.xcodeDev == "/Applications/Xcode.app/Contents/Developer" {
-                Reloader.xcodeDev = resolvedXcodeDev
-            }
-            #endif
-            // Use resolved path for SDK construction
-            Reloader.sysroot = "\(Reloader.xcodeDev)/Platforms/\(Reloader.platform).platform/Developer/SDKs/\(Reloader.platform).sdk"
-        }
-
-        let osSpecific: String
-        switch Reloader.platform {
-        case "iPhoneSimulator":
-            osSpecific = "-mios-simulator-version-min=9.0"
-        case "iPhoneOS":
-            osSpecific = "-miphoneos-version-min=9.0"
-        case "AppleTVSimulator":
-            osSpecific = "-mtvos-simulator-version-min=9.0"
-        case "AppleTVOS":
-            osSpecific = "-mtvos-version-min=9.0"
-        case "MacOSX":
-            let target = compileCommand
-                .replacingOccurrences(of: #"^.*( -target \S+).*$"#,
-                                      with: "$1", options: .regularExpression)
-            osSpecific = "-mmacosx-version-min=10.11"+target
-        case "XRSimulator": fallthrough case "XROS": fallthrough
-        default:
-            osSpecific = ""
-            log("⚠️ Invalid platform \(Reloader.platform)")
-            // -Xlinker -bundle_loader -Xlinker \"\(Bundle.main.executablePath!)\""
-        }
-        
-        let toolchain = Reloader.xcodeDev+"/Toolchains/XcodeDefault.xctoolchain"
-        let frameworks = Bundle.main.privateFrameworksPath ?? "/tmp"
-        Reloader.linkCommand = """
-            "\(toolchain)/usr/bin/clang" -arch "\(Reloader.arch)" \
-                -Xlinker -dylib -isysroot "\(Reloader.sysroot)" \(osSpecific) \
-                -L"\(toolchain)/usr/lib/swift/\(Reloader.platform.lowercased())" \
-                -undefined dynamic_lookup -dead_strip -Xlinker -objc_abi_version \
-                -Xlinker 2 -Xlinker -interposable -fobjc-arc \
-                -fprofile-instr-generate -L "\(frameworks)" -F "\(frameworks)" \
-                -rpath "\(frameworks)" -rpath /usr/lib/swift \
-                -rpath "\(toolchain)/usr/lib/swift-5.5/\(Reloader.platform.lowercased())"
-            """
     }
 
     /// Create a dyanmic library from an object file

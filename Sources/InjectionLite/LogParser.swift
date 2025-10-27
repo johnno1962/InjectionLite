@@ -75,7 +75,7 @@ struct LogParser: LiteParser {
         var command = command as NSString
         #if targetEnvironment(simulator) // has a case sensitive file system
         if let argument = try? NSRegularExpression(
-            pattern: Recompiler.fileNameRegex) {
+            pattern: Reloader.fileNameRegex) {
             for match in argument.matches(in: command as String,
                           range: NSMakeRange(0, command.length)).reversed() {
                 let range = match.range, path = command.substring(with: range)
@@ -93,12 +93,12 @@ struct LogParser: LiteParser {
         let escaped = escape(path: source)
         return command
             // Remove all output object files
-            .replacingOccurrences(of: " -o "+Recompiler.fileNameRegex,
+            .replacingOccurrences(of: " -o "+Reloader.fileNameRegex,
                                   with: " ", options: .regularExpression,
                                   range: NSMakeRange(0, command.length))
             // Strip out all per-primary-file options.
             .replacingOccurrences(of: " "+Reloader.optionsToRemove +
-                                  " "+Recompiler.argumentRegex,
+                                  " "+Reloader.argumentRegex,
                                   with: "", options: .regularExpression)
             // save to one side primary source file we are injecting
             .replacingOccurrences(of: " -primary-file "+escaped,
@@ -106,7 +106,7 @@ struct LogParser: LiteParser {
             // strip other -primary-file's or all files when -filelist
             .replacingOccurrences(of: " -primary-file " +
                                   (command.contains(" -filelist") ?
-                                   Recompiler.argumentRegex : ""),
+                                   Reloader.argumentRegex : ""),
                 with: " ", options: .regularExpression)
             // restore the -primary-file saved above
             .replacingOccurrences(of: "-primary-save", with: "-primary-file")
