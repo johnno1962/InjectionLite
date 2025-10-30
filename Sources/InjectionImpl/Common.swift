@@ -27,9 +27,11 @@ public class InjectionClient: NSObject {
     }
 }
 
+#if !canImport(Nimble)
 public func autoBitCast<IN,OUT>(_ x: IN) -> OUT {
     return unsafeBitCast(x, to: OUT.self)
 }
+#endif
 @discardableResult /// Can be used in if statements
 public func detail(_ str: @autoclosure () -> String) -> Bool {
     if getenv("INJECTION_DETAIL") != nil {
@@ -39,6 +41,13 @@ public func detail(_ str: @autoclosure () -> String) -> Bool {
 }
 
 extension Reloader {
+    public static var traceHook = { (injected: UnsafeMutableRawPointer,
+                                     symname: UnsafePointer<CChar>) in
+                                    return injected }
+    static func traceSIMP<T>(_ simp: T, _ name: UnsafePointer<CChar>) -> T {
+        return unsafeBitCast(traceHook(unsafeBitCast(simp,
+                 to: UnsafeMutableRawPointer.self), name), to: T.self)
+    }
     public static var injectionNumber = 0
     // Injection is relatively thread safe as interposes etc. are atomic but..
     #if os(macOS)

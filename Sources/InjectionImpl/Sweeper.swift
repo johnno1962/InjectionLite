@@ -172,7 +172,7 @@ public struct Sweeper {
                     continue
                 }
                 if replacement != existing {
-                    oldSlots[slotIndex] = replacement
+                    oldSlots[slotIndex] = Reloader.traceHook(replacement, symname)
                     detail("Patched[\(slotIndex)] \(replacement)/\(info.owner.imageKey) \(demangled)")
                     patched += 1
                 }

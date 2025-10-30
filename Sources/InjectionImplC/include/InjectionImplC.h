@@ -39,6 +39,10 @@
 #define INJECTION_BAZEL_TARGET "INJECTION_BAZEL_TARGET"
 /// Enable selected benchmarking of some operations.
 #define INJECTION_BENCH "INJECTION_BENCH"
+/// Enable tracing of function that have been injected..
+#define INJECTION_TRACE "INJECTION_TRACE"
+/// Enable lookup of function arguments of custom type..
+#define INJECTION_DECORATE "INJECTION_DECORATE"
 /// IP or hostname of developer's machine for connecting from device.
 #define INJECTION_HOST "INJECTION_HOST"
 

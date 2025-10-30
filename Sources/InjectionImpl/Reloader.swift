@@ -355,7 +355,7 @@ public struct Reloader {
                             symbol.hasSuffix(">") &&
                             !symbol.contains(".Optional<__C.") { continue }
                         if oldSlots[slot] != newSlots[slot] {
-                            oldSlots[slot] = newSlots[slot]
+                            oldSlots[slot] = Reloader.traceSIMP(newSlots[slot], symname)
                             detail("Patched[\(slot)] \(impl)/\(info.owner.imageKey) \(symbol)")
                         }
                     }
@@ -378,7 +378,8 @@ public struct Reloader {
                     continue
                 }
 
-                if class_replaceMethod(oldClass, selector, replacement,
+                if class_replaceMethod(oldClass, selector,
+                        Reloader.traceSIMP(replacement, sel_getName(selector)),
                     method_getTypeEncoding(methods[i])) != replacement {
                     detail("Swizzled \(prefix)[\(oldClass) \(selector)]")
                     swizzled += 1
@@ -412,7 +413,8 @@ public struct Reloader {
                 image, DLKit.mainImage, DLKit.appImages].compactMap({
                     $0.entry(named: symname)?.value }).first, to: IMP?.self),
               replacement != class_replaceMethod(oldClass, selector,
-                     replacement, method_getTypeEncoding(method)) {
+                     Reloader.traceSIMP(replacement, symname),
+                                  method_getTypeEncoding(method)) {
                detail("Swizzled "+(symname.demangled ??
                                    String(cString: symname)))
                return 1
@@ -430,10 +432,11 @@ public struct Reloader {
     mutating func interposeSymbols(in image: ImageSymbols) -> [DLKit.SymbolName] {
         var names = [DLKit.SymbolName](), impls = [UnsafeMutableRawPointer]()
         for entry in image {
-            guard let value = entry.value, // Does symbol have a value
+            guard var value = entry.value, // Does symbol have a value
                   Self.injectableSymbol(entry.name) else { continue }
             let symbol = String(cString: entry.name)
 //            detail("Interposing \(value) "+(entry.name.demangled ?? symbol))
+            value = Reloader.traceHook(value, entry.name)
             names.append(entry.name)
             impls.append(value)
             Self.interposed[symbol] = value
