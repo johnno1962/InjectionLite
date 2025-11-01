@@ -102,7 +102,7 @@ public struct Reloader {
                 """)
             }
         }
-        
+
         Self.preserveStatics = getenv(INJECTION_PRESERVE_STATICS) != nil
 
         // Check for changes to the size of types
@@ -128,7 +128,7 @@ public struct Reloader {
         if let loaded = DLKit.load(dylib: dylib) {
             let sizeChangedAlready = Self.sizeChanged
             Self.sizeChanged = false
-            
+
             for entry in loaded.entries(withSuffix: "N") {
                 if let value = entry.value,
                    let newSize = sizeof(anyType: value), newSize != 0,
@@ -138,7 +138,7 @@ public struct Reloader {
                     Self.sizeChanged = true
                 }
             }
-            
+
             if Self.sizeChanged {
                 if !sizeChangedAlready {
                     log("⚠️ Size of a type changed over injection, this will likely fail and this injection is blocked. If you try to inject it again it will be attempted.\n\n")

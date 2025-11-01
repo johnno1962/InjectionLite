@@ -26,13 +26,13 @@ private struct TrackingGenerics {
 
     private static var registryLock = os_unfair_lock()
     private static var _registry = [String: [ClassMetaData]]()
-    
+
     static func addToRegistry(baseName: String, newClass: ClassMetaData) {
         os_unfair_lock_lock(&registryLock)
         defer { os_unfair_lock_unlock(&registryLock) }
         _registry[baseName, default: []].append(newClass)
     }
-    
+
     static func getClasses(for baseName: String) -> [ClassMetaData] {
         os_unfair_lock_lock(&registryLock)
         defer { os_unfair_lock_unlock(&registryLock) }

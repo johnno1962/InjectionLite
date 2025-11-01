@@ -143,7 +143,7 @@ struct LogParser: LiteParser {
         }
         return out
     }
-    
+
     func prepareFinalCommand(command: String, source: String, objectFile: String, tmpdir: String, injectionNumber: Int) -> String {
         command + " -o \(objectFile)"
     }

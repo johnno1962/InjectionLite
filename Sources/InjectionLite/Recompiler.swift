@@ -26,7 +26,7 @@ import Popen
 #endif
 
 public struct Recompiler {
-    
+
     static var packageFrameworks: String?
 
     /// A cache is kept of compiltaion commands in /tmp as Xcode housekeeps logs.
@@ -49,7 +49,7 @@ public struct Recompiler {
             }
         }
         #endif
-        
+
         // Fallback to traditional Xcode log parsing
         return LogParser()
     }
@@ -144,7 +144,7 @@ public struct Recompiler {
             log("❌ Compilation failed:\n"+errors)
             return nil
         }
-        
+
         // Log successful compilation with timing
         let compilationDuration = Date.timeIntervalSinceReferenceDate - compilationStartTime
         log(String(format: "⚡ Compiled in %.0fms", compilationDuration * 1000))
@@ -157,7 +157,7 @@ public struct Recompiler {
             longTermCache[cacheKey] = command
             writeToCache()
         }
-        
+
         Reloader.extractLinkCommand(from: finalCommand)
         if !dylink {
             return objectFile

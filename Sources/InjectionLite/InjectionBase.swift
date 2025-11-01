@@ -62,7 +62,7 @@ open class InjectionBase: NSObject {
         for dir in dirs {
             GitIgnoreParser.monitor(directory: dir)
         }
-        
+
         let isVapor = Reloader.injectionQueue != .main
         watcher = FileWatcher(roots: dirs, callback: { filesChanged in
             for file in filesChanged {
