@@ -41,6 +41,10 @@
 #define INJECTION_BENCH "INJECTION_BENCH"
 /// Enable tracing of function that have been injected..
 #define INJECTION_TRACE "INJECTION_TRACE"
+/// Enable tracing of function that have been injected..
+#define INJECTION_TRACE_ALL "INJECTION_TRACE_ALL"
+/// Enable tracing of function that have been injected..
+#define INJECTION_TRACE_FRAMEWORKS "INJECTION_TRACE_FRAMEWORKS"
 /// Enable lookup of function arguments of custom type..
 #define INJECTION_DECORATE "INJECTION_DECORATE"
 /// IP or hostname of developer's machine for connecting from device.
