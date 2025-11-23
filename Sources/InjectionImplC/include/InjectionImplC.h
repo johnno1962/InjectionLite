@@ -11,6 +11,8 @@
 #define TCA_SYMBOL "_$s22ComposableArchitecture6LoggerCN"
 
 // Environment variables that can be used in schemes.
+/// IP or hostname of developer's machine for connecting from device.
+#define INJECTION_HOST "INJECTION_HOST"
 /// Default list of directories fo watch, should include ~/Library/Developer.
 #define INJECTION_DIRECTORIES "INJECTION_DIRECTORIES"
 /// The root directory(s) to file watch of the project being injected.
@@ -39,16 +41,23 @@
 #define INJECTION_BAZEL_TARGET "INJECTION_BAZEL_TARGET"
 /// Enable selected benchmarking of some operations.
 #define INJECTION_BENCH "INJECTION_BENCH"
-/// Enable tracing of function that have been injected..
+
+/// Enable tracing of functions that have been injected..
 #define INJECTION_TRACE "INJECTION_TRACE"
-/// Enable tracing of function that have been injected..
+/// Enable tracing of all functions in an app.
+/// If value starts with "|" added to regex of functions not to trace
 #define INJECTION_TRACE_ALL "INJECTION_TRACE_ALL"
-/// Enable tracing of function that have been injected..
+/// Regex of which functions to be included in trace.
+#define INJECTION_TRACE_FILTER "INJECTION_TRACE_FILTER"
+/// Enable expanson of custom app types in traces.
+/// If value starts with "|" added to regex of types not to lookup
+#define INJECTION_TRACE_LOOKUP "INJECTION_TRACE_LOOKUP"
+/// Enable tracing of function calls into frameworks.
+/// If there is a value it is a list of frameworks to trace.
 #define INJECTION_TRACE_FRAMEWORKS "INJECTION_TRACE_FRAMEWORKS"
-/// Enable lookup of function arguments of custom type..
-#define INJECTION_DECORATE "INJECTION_DECORATE"
-/// IP or hostname of developer's machine for connecting from device.
-#define INJECTION_HOST "INJECTION_HOST"
+/// Enable tracing of internal method invocations inside UIKit.
+/// If there is a value it is name of the framework to swizzle.
+#define INJECTION_TRACE_UIKIT "INJECTION_TRACE_UIKIT"
 
 /// Notification on injection.
 #define INJECTION_BUNDLE_NOTIFICATION "INJECTION_BUNDLE_NOTIFICATION"
