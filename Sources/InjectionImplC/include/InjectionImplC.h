@@ -58,6 +58,8 @@
 /// Enable tracing of internal method invocations inside UIKit.
 /// If there is a value it is name of the framework to swizzle.
 #define INJECTION_TRACE_UIKIT "INJECTION_TRACE_UIKIT"
+/// If global traces are crashing, add this value to your scheme until lt works.
+#define INJECTION_TRACE_REPAIR "INJECTION_TRACE_REPAIR"
 
 /// Notification on injection.
 #define INJECTION_BUNDLE_NOTIFICATION "INJECTION_BUNDLE_NOTIFICATION"
