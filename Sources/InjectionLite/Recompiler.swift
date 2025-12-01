@@ -37,17 +37,24 @@ public struct Recompiler {
     var tmpbase: String {
         return tmpdir+"eval\(Reloader.injectionNumber)"
     }
+    
+    static var workspaceCache = [String: String]()
   
     func findParser(forProjectContaining source: String) -> LiteParser {
         #if os(macOS)
+        let notBazel = "_NOTBAZEL_"
         // Check if this is a Bazel workspace
-        if let workspaceRoot = BazelInterface.findWorkspaceRoot(containing: source) {
+        if let workspaceRoot = Self.workspaceCache[source] ??
+            BazelInterface.findWorkspaceRoot(containing: source),
+            workspaceRoot != notBazel {
+            Self.workspaceCache[source] = workspaceRoot
             do {
                 return try BazelAQueryParser(workspaceRoot: workspaceRoot)
             } catch {
                 log("⚠️ Failed to create BazelAQueryParser: \(error), falling back to LogParser")
             }
         }
+        Self.workspaceCache[source] = notBazel
         #endif
 
         // Fallback to traditional Xcode log parsing
@@ -65,7 +72,7 @@ public struct Recompiler {
                                 platformFilter, found: &scanned) else {
             log("""
                 ⚠️ Could not locate command for \(source). \
-                Try editing a file and rebuilding your project. \
+                Try editing a file and rebuilding/reopening your project. \
                 \(APP_NAME) is not compatible with \"Whole Module\" \
                 Compilation Mode.
                 """)
