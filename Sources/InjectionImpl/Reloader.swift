@@ -237,7 +237,7 @@ public struct Reloader {
                 oldClasses.append(oldClass)
             }
         }
-        bench("Patched classes", since: start)
+        bench("Patched \(oldClasses)", since: start)
         return (oldClasses, newClasses, injectedGenerics)
     }
 
@@ -345,7 +345,7 @@ public struct Reloader {
                        let symname = info.name,
                        Self.injectableSymbol(symname) {
                         let symstr = String(cString: symname)
-                        if //lastName == nil,
+                        if info.image != lastLoaded,
                            let injectedSuper = Self.interposed[symstr] {
                             newSlots[slot] = injectedSuper
                         }
@@ -355,7 +355,8 @@ public struct Reloader {
                             symbol.hasSuffix(">") &&
                             !symbol.contains(".Optional<__C.") { continue }
                         if oldSlots[slot] != newSlots[slot] {
-                            oldSlots[slot] = Reloader.traceSIMP(newSlots[slot], symname)
+                            newSlots[slot] = Reloader.traceSIMP(newSlots[slot], symname)
+                            oldSlots[slot] = newSlots[slot]
                             detail("Patched[\(slot)] \(impl)/\(info.owner.imageKey) \(symbol)")
                         }
                     }
