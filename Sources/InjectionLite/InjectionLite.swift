@@ -29,8 +29,7 @@ open class InjectionLite: InjectionBase {
            let (image, classes) = reloader.loadAndPatch(in: dylib) {
             reloader.sweeper.sweepAndRunTests(image: image, classes: classes)
         } else if usingCached { // Try again once, after reparsing logs.
-            recompiler.longTermCache.removeObject(forKey: source)
-            recompiler.writeToCache()
+            recompiler.writeToCache(removing: source)
             inject(source: source)
         }
     }

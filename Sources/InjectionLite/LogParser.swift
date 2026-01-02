@@ -114,8 +114,8 @@ struct LogParser: LiteParser {
             .replacingOccurrences(of:
                 "-frontend-parseable-output ", with: "")
             // Strip junk with Xcode 16.3 and EMIT_FRONTEND_COMMAND_LINES
-            .replacingOccurrences(of: #"^\S*?"(?=/)"#,
-                                  with: "", options: .regularExpression)
+            .replacingOccurrences(of: #"^.*\d"/"#,
+                                  with: "/", options: .regularExpression)
     }
 
     /// determine the real letter casing of a path on the file system

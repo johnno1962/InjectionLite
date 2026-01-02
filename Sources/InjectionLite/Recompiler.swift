@@ -32,6 +32,7 @@ public struct Recompiler {
     /// A cache is kept of compiltaion commands in /tmp as Xcode housekeeps logs.
     lazy var longTermCache = NSMutableDictionary(contentsOfFile:
                     Reloader.cacheFile) ?? NSMutableDictionary()
+    public var cacheKey: String?
 
     let tmpdir = NSTemporaryDirectory()
     var tmpbase: String {
@@ -67,6 +68,7 @@ public struct Recompiler {
         let parser = findParser(forProjectContaining: source)
         var scanned: (logDir: String, scanner: Popen?)?
         let cacheKey = source+platformFilter
+        self.cacheKey = cacheKey
         guard var command = longTermCache[cacheKey] as? String ??
                 parser.command(for: source, platformFilter:
                                 platformFilter, found: &scanned) else {
@@ -140,8 +142,7 @@ public struct Recompiler {
 //            if !errors.contains(" error: ") { break }
             if !errors.contains("error: ") { break }
             let wasCached = longTermCache[cacheKey] != nil
-            longTermCache[cacheKey] = nil
-            writeToCache()
+            writeToCache(removing: cacheKey)
             if wasCached { // retry once
                 return recompile(source: source, platformFilter:
                                     platformFilter, dylink: dylink)
@@ -190,7 +191,10 @@ public struct Recompiler {
         return dylib
     }
 
-    public mutating func writeToCache() {
+    public mutating func writeToCache(removing: String? = nil) {
+        if let removing = removing {
+            longTermCache.removeObject(forKey: removing)
+        }
         longTermCache.write(toFile: Reloader.cacheFile,
                             atomically: true)
     }
@@ -228,10 +232,15 @@ public struct Recompiler {
         let linkCommand = Reloader.linkCommand + " \(objectFile) -o \"\(dylib)\""
         if let errors = Popen.system(linkCommand, errors: true) {
             log("⚠️ Linking failed:\n\(linkCommand)\nerrors:\n"+errors)
-            return nil
+            return linkingFailed()
         }
 
         return dylib
+    }
+    
+    mutating func linkingFailed<R>() -> R? {
+        writeToCache(removing: cacheKey)
+        return nil
     }
 }
 #endif
