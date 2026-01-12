@@ -26,11 +26,6 @@ the [InjectionIII](https://github.com/johnno1962/InjectionIII)
 README for more details on how it can be used to inject an iOS 
 app or SwiftUI interfaces and how it works its magic.
 
-For the sake of simplicity, this version of injection is
-missing the "Unhiding" functionality from InjectionIII
-sometimes required to be able to inject Swift code 
-that uses default function arguments.
-
 ## Bazel Support
 
 This version includes enhanced Bazel build system support with automatic target discovery and optimized compilation queries. When InjectionLite detects a Bazel workspace (via `MODULE.bazel` or `WORKSPACE` files), it automatically:

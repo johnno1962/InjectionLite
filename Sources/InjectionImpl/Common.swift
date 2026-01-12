@@ -76,6 +76,7 @@ extension Reloader {
     #endif
     public static let appName = Bundle.main.executableURL?.lastPathComponent ?? "Unknown"
     public static var cacheFile = "/tmp/\(appName)_\(sdk)_builds.plist"
+    public static var unhider: (() -> Void)?
 
     public static var optionsToRemove = #"(-(pch-output-dir|supplementary-output-file-map|emit-((reference-)?dependencies|const-values)|serialize-diagnostics|index-(store|unit-output))(-path)?|(-validate-clang-modules-once )?-clang-build-session-file|-Xcc -ivfsstatcache -Xcc)"#,
         typeCheckLimit = "-warn-long-expression-type-checking=150",

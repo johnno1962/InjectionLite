@@ -27,8 +27,6 @@ import Popen
 
 public struct Recompiler {
 
-    static var packageFrameworks: String?
-
     /// A cache is kept of compiltaion commands in /tmp as Xcode housekeeps logs.
     lazy var longTermCache = NSMutableDictionary(contentsOfFile:
                     Reloader.cacheFile) ?? NSMutableDictionary()
@@ -159,7 +157,8 @@ public struct Recompiler {
 
         if let frameworksArg: String = command[
             " -F (\(Reloader.argumentRegex)/PackageFrameworks) "] {
-            Self.packageFrameworks = frameworksArg[#"\\(.)"#, "$1"]
+            Unhider.packageFrameworks = frameworksArg[#"\\(.)"#, "$1"]
+            Reloader.unhider = Unhider.startUnhide
         }
         if longTermCache[cacheKey] as? String != command {
             longTermCache[cacheKey] = command

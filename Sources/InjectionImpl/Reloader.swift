@@ -34,7 +34,6 @@ public func log(_ what: Any..., prefix: String = APP_PREFIX, separator: String =
 public struct Reloader {
 
     public static var lastTime = Date.timeIntervalSinceReferenceDate // benchmarking
-    public static var unhider: (() -> Void)? // Not currently used.
     public let sweeper = Sweeper() // implements instance level @objc injected()
     static var staticInits = [String: DLKit.SymbolValue]()
     static var typeSizes = [String: Int]()
