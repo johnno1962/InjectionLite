@@ -41,7 +41,7 @@ extern const void *DLKit_appImagesContain(const char *symbol);
         (getenv(INJECTION_KEYPATHS) || DLKit_appImagesContain(TCA_SYMBOL)))
         hookKeyPaths((void *)swift_getKeyPath,
                      (void *)injection_getKeyPath);
-    if (!getenv(INJECTION_NOGENERICS))
+    if (!getenv(INJECTION_NOGENERICS) && !getenv(INJECTION_OF_GENERICS))
         injection_hookGenerics((void *)swift_allocateGenericClassMetadata,
                                (void *)injection_allocateGenericClassMetadata);
     // If InjectionLite class present, start it up.
