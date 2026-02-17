@@ -442,8 +442,13 @@ public struct Reloader {
             Self.interposed[symbol] = value
         }
 
+        
         // Apply interposes to all loaded images in the app using "fishhook"
-        let rebound = DLKit.appImages.rebind(names: names, values: impls)
+        var rebound = [DLKit.SymbolName]()
+        for image in DLKit.appImages.imageList {
+            rebound += image.rebind(names: names, values: impls)
+            detail("Rebound '\(image.imageKey)'[\(rebound.count)/\(names.count)]")
+        }
 
         // Apply previous interposes to the newly loaded image as well
         _ = image.rebind(symbols: Array(Self.interposed.keys) +
