@@ -67,7 +67,14 @@ public struct Recompiler {
         var scanned: (logDir: String, scanner: Popen?)?
         let cacheKey = source+platformFilter
         self.cacheKey = cacheKey
-        guard var command = longTermCache[cacheKey] as? String ??
+        var cachedCommand = longTermCache[cacheKey] as? String
+        if cachedCommand?.contains("llvmcas://") == true {
+            log("⚠️ Injection is not compatable with build " +
+                "setting COMPILATION_CACHE_ENABLE_CACHING")
+            writeToCache(removing: cacheKey)
+            cachedCommand = nil
+        }
+        guard var command = cachedCommand ??
                 parser.command(for: source, platformFilter:
                                 platformFilter, found: &scanned) else {
             log("""

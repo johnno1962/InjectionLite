@@ -387,7 +387,7 @@ public struct Reloader {
             }
             free(methods)
         }
-        bench("Sizzled class \(String(describing: oldClass))")
+        bench("Swizzled class \(String(describing: oldClass))")
     }
 
     /// Best effort here for generics. Swizzle injected() and viewDidLoad() methods.
