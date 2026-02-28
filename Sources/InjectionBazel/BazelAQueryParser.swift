@@ -42,7 +42,9 @@ public class BazelAQueryParser: LiteParser {
     
     // App target detection for optimized queries
     private var detectedAppTarget: String?
-    
+
+    private lazy var developerDir = BinaryResolver.shared.resolveXcodeDeveloperDir()
+
     public init(workspaceRoot: String) throws {
         self.workspaceRoot = workspaceRoot
         
@@ -281,7 +283,6 @@ public class BazelAQueryParser: LiteParser {
         
         // Replace __BAZEL_XCODE_DEVELOPER_DIR__ with actual developer directory
         if result.contains("__BAZEL_XCODE_DEVELOPER_DIR__") {
-            let developerDir = BinaryResolver.shared.resolveXcodeDeveloperDir()
             result = result.replacingOccurrences(of: "__BAZEL_XCODE_DEVELOPER_DIR__", with: developerDir)
         }
         
@@ -606,8 +607,19 @@ public class BazelAQueryParser: LiteParser {
         
         // Step 3: Add -primary-file with the changed file
         transformedCommand += " -primary-file \(primaryFile)"
-        
-        // Step 4: Add other Swift files as secondary sources (using cleaned list)
+
+        // Step 4: Add plugin paths for system macros
+
+        let pluginServerPath = "\(developerDir)/Platforms/iPhoneOS.platform/Developer/usr/bin/swift-plugin-server"
+        transformedCommand += """
+         -external-plugin-path '\(developerDir)/Platforms/iPhoneOS.platform/Developer/usr/lib/swift/host/plugins#\(pluginServerPath)' \
+        -external-plugin-path '\(developerDir)/Platforms/iPhoneOS.platform/Developer/usr/local/lib/swift/host/plugins#\(pluginServerPath)' \
+        -in-process-plugin-server-path '\(developerDir)/Toolchains/XcodeDefault.xctoolchain/usr/lib/swift/host/libSwiftInProcPluginServer.dylib' \
+        -plugin-path '\(developerDir)/Toolchains/XcodeDefault.xctoolchain/usr/lib/swift/host/plugins' \
+        -plugin-path '\(developerDir)/Toolchains/XcodeDefault.xctoolchain/usr/local/lib/swift/host/plugins'
+        """
+
+        // Step 5: Add other Swift files as secondary sources (using cleaned list)
         for otherFile in cleanOtherFiles {
             transformedCommand += " \(otherFile)"  
         }
