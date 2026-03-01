@@ -61,6 +61,12 @@
 /// If global traces are crashing, add this value to your scheme until lt works.
 #define INJECTION_TRACE_REPAIR "INJECTION_TRACE_REPAIR"
 
+/// Path to bazelisk or bazel.
+#define INJECTION_BAZEL_PATH "INJECTION_BAZEL_PATH"
+/// Path to xcrun.
+#define INJECTION_XCRUN_PATH "INJECTION_XCRUN_PATH"
+/// Supress initial app popup.
+#define INJECTION_HIDE_XCODE_ALERT "INJECTION_HIDE_XCODE_ALERT"
 /// Notification on injection.
 #define INJECTION_BUNDLE_NOTIFICATION "INJECTION_BUNDLE_NOTIFICATION"
 /// Notification posted with injection timing metrics.

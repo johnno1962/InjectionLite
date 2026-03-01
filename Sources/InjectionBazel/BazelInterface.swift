@@ -31,7 +31,7 @@ public class BinaryResolver {
         let path = "/bin:/usr/bin:/usr/local/bin:/opt/homebrew/bin"
         let export = "export PATH='\(path)'; which "
         let bazelPath = (
-            ProcessInfo.processInfo.environment["INJECTION_BAZEL_PATH"] ??
+            ProcessInfo.processInfo.environment[INJECTION_BAZEL_PATH] ??
             Popen.system(export+"bazelisk") ??
             Popen.system(export+"bazel")
         )?.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -52,7 +52,7 @@ public class BinaryResolver {
         }
         
         // Level 2: Check for injected environment variable
-        if let injectedPath = getenv("INJECTION_XCRUN_PATH") {
+        if let injectedPath = getenv(INJECTION_XCRUN_PATH) {
             let pathString = String(cString: injectedPath)
             if FileManager.default.fileExists(atPath: pathString) {
                 return pathString
