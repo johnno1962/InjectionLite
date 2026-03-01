@@ -30,9 +30,11 @@ public class BinaryResolver {
         }
         let path = "/bin:/usr/bin:/usr/local/bin:/opt/homebrew/bin"
         let export = "export PATH='\(path)'; which "
-        let bazelPath = (Popen.system(export+"bazelisk") ??
-                Popen.system(export+"bazel"))?
-            .trimmingCharacters(in: .whitespacesAndNewlines)
+        let bazelPath = (
+            ProcessInfo.processInfo.environment["INJECTION_BAZEL_PATH"] ??
+            Popen.system(export+"bazelisk") ??
+            Popen.system(export+"bazel")
+        )?.trimmingCharacters(in: .whitespacesAndNewlines)
         if let bazelPath {
             resolvedBazelPath = bazelPath
             return bazelPath
