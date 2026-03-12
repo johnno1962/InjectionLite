@@ -476,11 +476,17 @@ public class BazelActionQueryHandler {
             return nil
         }
         
+        let bazel9Prefix = "\(NSHomeDirectory())/Library/Caches/bazel/_bazel"
         let executionRoot = output
             .trimmingCharacters(in: .whitespacesAndNewlines)
             .split(separator: "\n")
-            .filter { $0.starts(with: "/private/var/tmp/_bazel") }
-            .first.map(String.init) ?? ""
+            .first {
+                // Bazel < 9
+                $0.starts(with: "/private/var/tmp/_bazel")
+                // Bazel 9+
+                || $0.starts(with: bazel9Prefix)
+            }
+            .map(String.init) ?? ""
         if !executionRoot.isEmpty {
             cachedExecutionRoot = executionRoot
             return executionRoot
