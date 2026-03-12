@@ -218,7 +218,7 @@ public struct Reloader {
         var newClasses = [AnyClass]()
         for aClass in Set((image.swiftSymbols(withSuffixes: ["CN"]) +
                            image.entries(withPrefix: "OBJC_CLASS_$_"))
-                    .compactMap { $0.value }) {
+                    .compactMap(\.value)) {
             let newClass: AnyClass = autoBitCast(aClass)
             injectedGenerics.remove(_typeName(newClass))
             newClasses.append(newClass)
