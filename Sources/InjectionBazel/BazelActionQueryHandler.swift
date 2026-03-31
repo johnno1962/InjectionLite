@@ -10,11 +10,6 @@ import Foundation
 #if canImport(InjectionImpl)
 import InjectionImpl
 #endif
-#if canImport(PopenD)
-import PopenD
-#else
-import Popen
-#endif
 
 #if !os(macOS)
 extension Popen {

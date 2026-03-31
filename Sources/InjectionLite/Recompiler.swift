@@ -62,7 +62,7 @@ public struct Recompiler {
 
     /// Recompile a source to produce a dynamic library that can be loaded
     mutating func recompile(source: String, platformFilter: String = "",
-                            dylink: Bool) -> String? {
+                            module: String = "", dylink: Bool) -> String? {
         let parser = findParser(forProjectContaining: source)
         var scanned: (logDir: String, scanner: Popen?)?
         let cacheKey = source+platformFilter
@@ -75,8 +75,8 @@ public struct Recompiler {
             cachedCommand = nil
         }
         guard var command = cachedCommand ??
-                parser.command(for: source, platformFilter:
-                                platformFilter, found: &scanned) else {
+                parser.command(for: source, platformFilter: platformFilter,
+                               module: Reloader.appName, found: &scanned) else {
             log("""
                 ⚠️ Could not locate command for \(source). \
                 Try editing a file and rebuilding/reopening your project. \
@@ -91,7 +91,7 @@ public struct Recompiler {
            !FileManager.default.fileExists(atPath: filelistPath) {
             if scanned == nil,
                let rescanned = parser.command(for: source, platformFilter:
-                                              platformFilter, found: &scanned) {
+                        platformFilter, module: module, found: &scanned) {
                 command = rescanned
             }
 
@@ -114,10 +114,17 @@ public struct Recompiler {
         log("🔄 [\(fileName)] Recompiling\(platformFilter.isEmpty ? "" : " (\(platformFilter))")")
 
         Reloader.injectionNumber += 1
-        let objectFile = tmpbase + ".o"
+        var objectFile = tmpbase + ".o"
         unlink(objectFile)
         let benchmark = source.hasSuffix(".swift") ? Reloader.typeCheckLimit : ""
-        let finalCommand = parser.prepareFinalCommand(
+        var isXcode26_3 = 0
+        withUnsafeMutablePointer(to: &isXcode26_3) {
+            command[#"\s*builtin-Swift-Compilation(-Requirements)? --"#, count: $0] = ""
+        }
+        let finalCommand = isXcode26_3 != 0 ? command[
+            #" -(const-\S+|use-save-temps)|-Xfrontend \S+_const_extract_protocols.json"#,
+            ""]+" -Xfrontend \(benchmark)" :
+            parser.prepareFinalCommand(
             command: command,
             source: source,
             objectFile: objectFile,
@@ -172,6 +179,13 @@ public struct Recompiler {
             writeToCache()
         }
 
+        if !FileManager.default.fileExists(atPath: objectFile),
+            let base = FileWatcher.objectBase {
+            let filename = URL(fileURLWithPath: source).deletingPathExtension()
+                .lastPathComponent[#"([ $])"#, "\\\\$1"]+".o"
+            objectFile = URL(fileURLWithPath: base)
+                .appendingPathComponent(filename).path
+        }
         Reloader.extractLinkCommand(from: finalCommand)
         if !dylink {
             return objectFile

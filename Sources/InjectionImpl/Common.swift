@@ -74,11 +74,11 @@ extension Reloader {
     #elseif arch(x86_64)
     public static var arch = "x86_64"
     #endif
-    public static let appName = Bundle.main.executableURL?.lastPathComponent ?? "Unknown"
+    public static var appName = Bundle.main.executableURL?.lastPathComponent ?? "Unknown"
     public static var cacheFile = "/tmp/\(appName)_\(sdk)_builds.plist"
     public static var unhider: (() -> Void)?
 
-    public static var optionsToRemove = #"(-(pch-output-dir|supplementary-output-file-map|emit-((reference-)?dependencies|const-values)|serialize-diagnostics|index-(store|unit-output))(-path)?|(-validate-clang-modules-once )?-clang-build-session-file|-Xcc -ivfsstatcache -Xcc)"#,
+    public static var optionsToRemove = #"(-(pch-output-dir|supplementary-output-file-map|emit-((reference-)?dependencies|const-values)|serialize-diagnostics|index-(store|unit-output)|explicit-swift-module-map-file)(-path)?|(-validate-clang-modules-once )?-clang-build-session-file|-Xcc -ivfsstatcache -Xcc)"#,
         typeCheckLimit = "-warn-long-expression-type-checking=150",
         typeCheckRegex = #"(?<=/)\w+\.swift:\d+:\d+: warning: expression took \d+ms to type-check.*"#
 

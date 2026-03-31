@@ -8,12 +8,8 @@
 #if (DEBUG || !SWIFT_PACKAGE) && os(macOS)
 import Foundation
 #if canImport(InjectionImpl)
+import InjectionImplC
 import InjectionImpl
-#endif
-#if canImport(PopenD)
-import PopenD
-#else
-import Popen
 #endif
 
 /// Shared utility for resolving development tool binaries with sandbox support

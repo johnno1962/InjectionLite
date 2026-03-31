@@ -14,17 +14,25 @@
 //
 #if DEBUG || !SWIFT_PACKAGE
 import Foundation
+#if canImport(InjectionImpl)
+import InjectionImpl
+#endif
 
 public class FileWatcher: NSObject {
     public typealias InjectionCallback = (_ filesChanged: [String]) -> Void
     static var INJECTABLE_PATTERN = try! NSRegularExpression(
-        pattern: "[^~]\\.(mm?|cpp|swift|storyboard|xib)$")
+        pattern: "[^~]\\.(mm?|cpp|swift|storyboard|xib|o)$")
 
-    static let logsPref = "HotReloadingBuildLogsDir"
+    static let logsPref = "HotReloadingBuildLogsDir", basePref = "appObjectBase"
     static var defaultLog = UserDefaults.standard.string(forKey: logsPref)
     static var derivedLog = defaultLog {
         didSet {
             UserDefaults.standard.set(derivedLog, forKey: logsPref)
+        }
+    }
+    static var objectBase = UserDefaults.standard.string(forKey: basePref) {
+        didSet {
+            UserDefaults.standard.set(objectBase, forKey: basePref)
         }
     }
 
@@ -131,6 +139,15 @@ public class FileWatcher: NSObject {
             if eventId <= eventsStart { continue }
             #endif
 
+            if path.hasSuffix(".o") {
+                let base = URL(fileURLWithPath: path)
+                    .deletingLastPathComponent()
+                if base.lastPathComponent == Reloader.arch,
+                   Self.objectBase != base.path {
+                    Self.objectBase = base.path
+                }
+                return
+            }
             if Self.INJECTABLE_PATTERN.firstMatch(in: path, range:
                         NSMakeRange(0, path.utf16.count)) != nil  &&
                 path.range(of: "DerivedData/|InjectionProject/|.DocumentRevisions-|@__swiftmacro_|main.mm?$",

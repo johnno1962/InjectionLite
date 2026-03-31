@@ -30,7 +30,20 @@ private struct ViewBodyKeyPaths {
     static var save_getKeyPath: KeyPathFunc!
 
     static var cache = [String: ViewBodyKeyPaths]()
-    static var lastInjectionNumber = Reloader.injectionNumber
+    #if canImport(Nimble) || SWIFT_PACKAGE // InjectionNext
+    static var injectionNumber: Int { Reloader.injectionNumber }
+    static var lastInjectionNumber = injectionNumber
+    #if canImport(DLKitD)
+    static func log(_ what: Any...) { InjectionImpl.log(what) }
+    static var detail = InjectionImpl.detail
+    #else
+    static func log(_ what: Any...) { InjectionBundle.log(what) }
+    static var detail = InjectionBundle.detail
+    #endif
+    #else
+    static var injectionNumber: Int { SwiftEval.instance.injectionNumber }
+    static var lastInjectionNumber = SwiftEval().injectionNumber
+    #endif
     static var hasInjected = false
 
     var lastOffset = 0
@@ -38,6 +51,10 @@ private struct ViewBodyKeyPaths {
     var recycled = false
     var keyPaths = [UnsafeRawPointer]()
 }
+
+#if canImport(Nimble) || SWIFT_PACKAGE // InjectionNext
+private typealias SwiftInjection = ViewBodyKeyPaths
+#endif
 
 @_cdecl("hookKeyPaths")
 public func hookKeyPaths(original: UnsafeMutableRawPointer,
@@ -52,20 +69,26 @@ public func hookKeyPaths(original: UnsafeMutableRawPointer,
 //        print("⚠️ Could not find replacement symbol: injection_getKeyPath")
 //        return
 //    }
-    log("ℹ️ Intercepting keypaths for when their types are injected. Add an " +
+    SwiftInjection.log(
+        "ℹ️ Intercepting keypaths for when their types are injected. Add an " +
         "env. var \(INJECTION_NOKEYPATHS) to your scheme to opt-out of this.")
     ViewBodyKeyPaths.save_getKeyPath = autoBitCast(original)
     var keyPathRebinding = [rebinding(name: strdup(ViewBodyKeyPaths.keyPathFuncName),
                                       replacement: replacer, replaced: nil)]
+    #if canImport(Nimble) || SWIFT_PACKAGE // InjectionNext
     Reloader.interposed[ViewBodyKeyPaths.keyPathFuncName] = replacer
     _ = DLKit.appImages.rebind(rebindings: &keyPathRebinding)
+    #else
+    SwiftTrace.initialRebindings += keyPathRebinding
+    _ = SwiftTrace.apply(rebindings: &keyPathRebinding)
+    #endif
 }
 
 @_cdecl("injection_getKeyPath")
 public func injection_getKeyPath(pattern: UnsafeMutableRawPointer,
                                  arguments: UnsafeRawPointer) -> UnsafeRawPointer {
-    if ViewBodyKeyPaths.lastInjectionNumber != Reloader.injectionNumber {
-        ViewBodyKeyPaths.lastInjectionNumber = Reloader.injectionNumber
+    if ViewBodyKeyPaths.lastInjectionNumber != ViewBodyKeyPaths.injectionNumber {
+        ViewBodyKeyPaths.lastInjectionNumber = ViewBodyKeyPaths.injectionNumber
         for key in ViewBodyKeyPaths.cache.keys { // Reset counters
             ViewBodyKeyPaths.cache[key]?.keyPathNumber = 0
             ViewBodyKeyPaths.cache[key]?.recycled = false
@@ -73,11 +96,21 @@ public func injection_getKeyPath(pattern: UnsafeMutableRawPointer,
         ViewBodyKeyPaths.hasInjected = true
     }
     for caller in Thread.callStackReturnAddresses.dropFirst() {
-        guard let caller = caller.pointerValue, let info =
+        #if canImport(Nimble) || SWIFT_PACKAGE // InjectionNext
+        guard let caller = caller.pointerValue, let dlinfo =
                 Reloader.cachedGetInfo(image: DLKit.allImages, impl: caller),
-              let callerDecl = info.name.demangled else {
+              let callerDecl = dlinfo.name.demangled else {
             continue
         }
+        let info = dlinfo.info
+        #else
+        var info = Dl_info()
+        guard let caller = caller.pointerValue,
+              dladdr(caller, &info) != 0, let symbol = info.dli_sname,
+              let callerDecl = SwiftMeta.demangle(symbol: symbol) else {
+                continue
+        }
+        #endif
         if !callerDecl.hasSuffix(".body.getter : some") {
             break
         }
@@ -90,7 +123,7 @@ public func injection_getKeyPath(pattern: UnsafeMutableRawPointer,
 //        print(callerSym, ins)
         var body = ViewBodyKeyPaths.cache[callerKey] ?? ViewBodyKeyPaths()
         // reset keyPath counter ?
-        let offset = caller-info.info.dli_saddr
+        let offset = caller-info.dli_saddr
         if offset <= body.lastOffset {
             body.keyPathNumber = 0
             body.recycled = false
@@ -100,7 +133,7 @@ public func injection_getKeyPath(pattern: UnsafeMutableRawPointer,
         // extract cached keyPath or create
         let keyPath: UnsafeRawPointer
         if body.keyPathNumber < body.keyPaths.count && ViewBodyKeyPaths.hasInjected {
-            detail("Recycling \(callerKey)\(body.keyPathNumber)")
+            _ = SwiftInjection.detail("Recycling \(callerKey)\(body.keyPathNumber)")
             keyPath = body.keyPaths[body.keyPathNumber]
             body.recycled = true
         } else {
@@ -109,7 +142,7 @@ public func injection_getKeyPath(pattern: UnsafeMutableRawPointer,
                 body.keyPaths.append(keyPath)
             }
             if body.recycled {
-                log("""
+                SwiftInjection.log("""
                     ⚠️ New key path expression introduced over injection. \
                     This will likely fail and you'll have to restart your \
                     application.

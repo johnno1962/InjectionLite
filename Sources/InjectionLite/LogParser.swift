@@ -25,7 +25,7 @@ import Popen
 struct LogParser: LiteParser {
 
     /// "grep" the most recent build log for the command to recompile a file
-    func command(for source: String, platformFilter: String = "",
+    func command(for source: String, platformFilter: String = "", module: String = "",
                  found: inout (logDir: String, scanner: Popen?)?) -> String? {
         guard let logsDir = FileWatcher.derivedLog.flatMap({
             URL(fileURLWithPath: $0)
@@ -50,10 +50,19 @@ struct LogParser: LiteParser {
                     /usr/bin/grep " \(option) \(escaped) " \(isSwift &&
                     platformFilter != "" ? "| /usr/bin/grep \(platformFilter)" : ""); \
                 then echo $log && exit; fi; done
+            """,
+            xCode26_3 = """
+            cd "\(logsDir)" && for log in `/bin/ls -t *.xcactivitylog`; do \
+                if /usr/bin/gunzip <$log | /usr/bin/tr '\\r' '\\n' | \
+                    /usr/bin/grep builtin-Swift-Compilation | \
+                    /usr/bin/grep " -module-name \(module) " \(isSwift &&
+                    platformFilter != "" ? "| /usr/bin/grep \(platformFilter)" : ""); \
+                then exit; fi; exit; done
             """
 
         let scanning = Popen(cmd: scanner)
-        guard let command = scanning?.readLine() else {
+        guard let command = scanning?.readLine() ??
+                (module != "" ? Popen(cmd: xCode26_3)?.readLine() : nil) else {
             log("Log scanning failed: "+scanner)
             log("With Xcode 16.3+, have you tried adding build setting EMIT_FRONTEND_COMMAND_LINES?")
             return nil
