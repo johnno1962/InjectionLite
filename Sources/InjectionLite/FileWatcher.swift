@@ -15,6 +15,7 @@
 #if DEBUG || !SWIFT_PACKAGE
 import Foundation
 #if canImport(InjectionImpl)
+import InjectionImplC
 import InjectionImpl
 #endif
 
@@ -23,18 +24,22 @@ public class FileWatcher: NSObject {
     static var INJECTABLE_PATTERN = try! NSRegularExpression(
         pattern: "[^~]\\.(mm?|cpp|swift|storyboard|xib|o)$")
 
-    static let logsPref = "HotReloadingBuildLogsDir", basePref = "appObjectBase"
+    static let logsPref = "HotReloadingBuildLogsDir", basePref = "appobjectsBase"
     static var defaultLog = UserDefaults.standard.string(forKey: logsPref)
     static var derivedLog = defaultLog {
         didSet {
             UserDefaults.standard.set(derivedLog, forKey: logsPref)
         }
     }
-    static var objectBase = UserDefaults.standard.string(forKey: basePref) {
+    static var defaultBase = UserDefaults.standard.string(forKey: basePref)
+    static var objectsBase = defaultBase {
         didSet {
-            UserDefaults.standard.set(objectBase, forKey: basePref)
+            UserDefaults.standard.set(objectsBase, forKey: basePref)
+            print(APP_PREFIX+" objectsBase: "+objectsBase!)
+            objectBases.insert(objectsBase!)
         }
     }
+    static var objectBases = Set<String>()
 
     var initStream: ((FSEventStreamEventId) -> Void)!
     var eventsStart =
@@ -125,6 +130,15 @@ public class FileWatcher: NSObject {
         var changed = Set<String>()
         for path in changes {
             guard let path = path as? String else { continue }
+            if path.hasSuffix(".o") {
+                let base = URL(fileURLWithPath: path)
+                    .deletingLastPathComponent()
+                if base.lastPathComponent == Reloader.arch,
+                   Self.objectsBase != base.path || Self.objectBases.isEmpty {
+                    Self.objectsBase = base.path
+                }
+                continue
+            }
             #if !INJECTION_III_APP
             if path.hasSuffix(".xcactivitylog") &&
                 path.contains("/Logs/Build/") {
@@ -139,15 +153,6 @@ public class FileWatcher: NSObject {
             if eventId <= eventsStart { continue }
             #endif
 
-            if path.hasSuffix(".o") {
-                let base = URL(fileURLWithPath: path)
-                    .deletingLastPathComponent()
-                if base.lastPathComponent == Reloader.arch,
-                   Self.objectBase != base.path {
-                    Self.objectBase = base.path
-                }
-                return
-            }
             if Self.INJECTABLE_PATTERN.firstMatch(in: path, range:
                         NSMakeRange(0, path.utf16.count)) != nil  &&
                 path.range(of: "DerivedData/|InjectionProject/|.DocumentRevisions-|@__swiftmacro_|main.mm?$",

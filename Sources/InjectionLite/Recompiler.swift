@@ -67,7 +67,8 @@ public struct Recompiler {
         var scanned: (logDir: String, scanner: Popen?)?
         let cacheKey = source+platformFilter
         self.cacheKey = cacheKey
-        var cachedCommand = longTermCache[cacheKey] as? String
+        var cachedCommand = getenv("NO_CACHING") == nil ?
+            longTermCache[cacheKey] as? String : nil
         if cachedCommand?.contains("llvmcas://") == true {
             log("⚠️ Injection is not compatable with build " +
                 "setting COMPILATION_CACHE_ENABLE_CACHING")
@@ -153,9 +154,8 @@ public struct Recompiler {
 
 //            if !errors.contains(" error: ") { break }
             if !errors.contains("error: ") { break }
-            let wasCached = longTermCache[cacheKey] != nil
             writeToCache(removing: cacheKey)
-            if wasCached { // retry once
+            if cachedCommand != nil { // retry once
                 return recompile(source: source, platformFilter:
                                     platformFilter, dylink: dylink)
             }
@@ -179,12 +179,18 @@ public struct Recompiler {
             writeToCache()
         }
 
-        if !FileManager.default.fileExists(atPath: objectFile),
-            let base = FileWatcher.objectBase {
-            let filename = URL(fileURLWithPath: source).deletingPathExtension()
-                .lastPathComponent[#"([ $])"#, "\\\\$1"]+".o"
+        var bases = FileWatcher.objectBases, replaced = false
+        while !FileManager.default.fileExists(atPath: objectFile),
+              let base = bases.first {
+            let filename = URL(fileURLWithPath: source)
+                .deletingPathExtension().lastPathComponent+".o"
             objectFile = URL(fileURLWithPath: base)
                 .appendingPathComponent(filename).path
+            bases.remove(base)
+            replaced = true
+        }
+        if replaced {
+            objectFile[#"([ $])"#] = "\\\\$1"
         }
         Reloader.extractLinkCommand(from: finalCommand)
         if !dylink {
