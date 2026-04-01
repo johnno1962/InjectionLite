@@ -122,6 +122,7 @@ public struct Recompiler {
         withUnsafeMutablePointer(to: &isXcode26_3) {
             command[#"\s*builtin-Swift-Compilation(-Requirements)? --"#, count: $0] = ""
         }
+        command[#"-dependencies-(\d+)\.json"#] = "*"
         let finalCommand = isXcode26_3 != 0 ? command[
             #" -(const-\S+|use-save-temps)|-Xfrontend \S+_const_extract_protocols.json"#,
             ""]+" -Xfrontend \(benchmark)" :

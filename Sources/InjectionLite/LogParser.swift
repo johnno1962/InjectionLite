@@ -61,8 +61,8 @@ struct LogParser: LiteParser {
             """
 
         let scanning = Popen(cmd: scanner)
-        guard let command = scanning?.readLine() ??
-                (module != "" ? Popen(cmd: xCode26_3)?.readLine() : nil) else {
+        guard let command = scanning?.readLine() ?? (module != "" && false ?
+               Popen(cmd: xCode26_3)?.readLine() : nil) else {
             log("Log scanning failed: "+scanner)
             log("With Xcode 16.3+, have you tried adding build setting EMIT_FRONTEND_COMMAND_LINES?")
             return nil
