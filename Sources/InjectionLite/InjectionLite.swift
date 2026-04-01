@@ -25,8 +25,7 @@ open class InjectionLite: InjectionBase {
 
     override func inject(source: String) {
         let usingCached = recompiler.longTermCache[source] != nil
-        if let dylib = recompiler.recompile(source: source,
-                            module: Reloader.appName, dylink: true),
+        if let dylib = recompiler.recompile(source: source, dylink: true),
            let (image, classes) = reloader.loadAndPatch(in: dylib) {
             reloader.sweeper.sweepAndRunTests(image: image, classes: classes)
         } else if usingCached { // Try again once, after reparsing logs.

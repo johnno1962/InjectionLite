@@ -62,7 +62,7 @@ public struct Recompiler {
 
     /// Recompile a source to produce a dynamic library that can be loaded
     mutating func recompile(source: String, platformFilter: String = "",
-                            module: String = "", dylink: Bool) -> String? {
+                            dylink: Bool) -> String? {
         let parser = findParser(forProjectContaining: source)
         var scanned: (logDir: String, scanner: Popen?)?
         let cacheKey = source+platformFilter
@@ -76,8 +76,8 @@ public struct Recompiler {
             cachedCommand = nil
         }
         guard var command = cachedCommand ??
-                parser.command(for: source, platformFilter: platformFilter,
-                               module: Reloader.appName, found: &scanned) else {
+                parser.command(for: source, platformFilter:
+                                platformFilter, found: &scanned) else {
             log("""
                 ⚠️ Could not locate command for \(source). \
                 Try editing a file and rebuilding/reopening your project. \
@@ -92,7 +92,7 @@ public struct Recompiler {
            !FileManager.default.fileExists(atPath: filelistPath) {
             if scanned == nil,
                let rescanned = parser.command(for: source, platformFilter:
-                        platformFilter, module: module, found: &scanned) {
+                                              platformFilter, found: &scanned) {
                 command = rescanned
             }
 
@@ -122,7 +122,7 @@ public struct Recompiler {
         withUnsafeMutablePointer(to: &isXcode26_3) {
             command[#"\s*builtin-Swift-Compilation(-Requirements)? --"#, count: $0] = ""
         }
-        command[#"-dependencies-(\d+)\.json"#] = "*"
+//        command[#"-dependencies-(\d+)\.json"#] = "*"
         let finalCommand = isXcode26_3 != 0 ? command[
             #" -(const-\S+|use-save-temps)|-Xfrontend \S+_const_extract_protocols.json"#,
             ""]+" -Xfrontend \(benchmark)" :

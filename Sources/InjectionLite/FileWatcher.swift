@@ -24,7 +24,7 @@ public class FileWatcher: NSObject {
     static var INJECTABLE_PATTERN = try! NSRegularExpression(
         pattern: "[^~]\\.(mm?|cpp|swift|storyboard|xib|o)$")
 
-    static let logsPref = "HotReloadingBuildLogsDir", basePref = "appobjectsBase"
+    static let logsPref = "HotReloadingBuildLogsDir", basePref = "appObjectBase"
     static var defaultLog = UserDefaults.standard.string(forKey: logsPref)
     static var derivedLog = defaultLog {
         didSet {

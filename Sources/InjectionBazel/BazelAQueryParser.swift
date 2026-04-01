@@ -21,7 +21,7 @@ extension String {
 }
 
 public protocol LiteParser {
-  func command(for source: String, platformFilter: String, module: String,
+  func command(for source: String, platformFilter: String,
                found: inout (logDir: String, scanner: Popen?)?) -> String?
   func prepareFinalCommand(command: String, source: String, objectFile: String, tmpdir: String, injectionNumber: Int) -> String
 }
@@ -78,7 +78,7 @@ public class BazelAQueryParser: LiteParser {
     
     // MARK: - LiteParser Implementation
     
-    public func command(for source: String, platformFilter: String, module: String,
+    public func command(for source: String, platformFilter: String,
                        found: inout (logDir: String, scanner: Popen?)?) -> String? {
         let fileName = URL(fileURLWithPath: source).lastPathComponent
         
