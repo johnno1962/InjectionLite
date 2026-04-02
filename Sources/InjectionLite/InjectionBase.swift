@@ -11,11 +11,6 @@
 //
 
 #if DEBUG || !SWIFT_PACKAGE
-#if canImport(InjectionImplC)
-import InjectionBazel
-import InjectionImplC
-import InjectionImpl
-#endif
 import Foundation
 
 open class InjectionBase: NSObject {

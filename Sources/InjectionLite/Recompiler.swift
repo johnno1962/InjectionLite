@@ -13,17 +13,12 @@
 //
 
 #if DEBUG || !SWIFT_PACKAGE
-#if canImport(InjectionImplC)
-import InjectionImplC
-import InjectionBazel
-import InjectionImpl
+#if canImport(InjectionImpl)
+@_exported import InjectionBazel
+@_exported import InjectionImplC
+@_exported import InjectionImpl
 #endif
 import Foundation
-#if canImport(PopenD)
-import PopenD
-#else
-import Popen
-#endif
 
 public struct Recompiler {
 
@@ -36,6 +31,15 @@ public struct Recompiler {
     var tmpbase: String {
         return tmpdir+"eval\(Reloader.injectionNumber)"
     }
+    
+    lazy var fallbackWarning: Void = {
+        log("""
+            ℹ️ Falling back to "builtin" compilation of files. \
+            This only works injecting files in the main package. \
+            It's better to add a project build setting \
+            \(EMIT_FRONTEND_COMMAND_LINES)=YES.
+            """)
+    }()
     
     static var workspaceCache = [String: String]()
   
@@ -120,7 +124,7 @@ public struct Recompiler {
         let benchmark = source.hasSuffix(".swift") ? Reloader.typeCheckLimit : ""
         var isXcode26_3 = 0
         withUnsafeMutablePointer(to: &isXcode26_3) {
-            command[#"\s*builtin-Swift-Compilation(-Requirements)? --"#, count: $0] = ""
+            command[#"\s*builtin(-\w+)+ --"#, count: $0] = ""
         }
 //        command[#"-dependencies-(\d+)\.json"#] = "*"
         let finalCommand = isXcode26_3 != 0 ? command[
@@ -180,19 +184,28 @@ public struct Recompiler {
             writeToCache()
         }
 
-        var bases = FileWatcher.objectBases, replaced = false
-        while !FileManager.default.fileExists(atPath: objectFile),
-              let base = bases.first {
-            let filename = URL(fileURLWithPath: source)
-                .deletingPathExtension().lastPathComponent+".o"
-            objectFile = URL(fileURLWithPath: base)
-                .appendingPathComponent(filename).path
-            bases.remove(base)
-            replaced = true
+        if isXcode26_3 != 0 {
+            _ = fallbackWarning
+            var located = false
+            for base in Reloader.injectionQueue
+                .sync(execute: { FileWatcher.objectBases }) {
+                let filename = URL(fileURLWithPath: source)
+                    .deletingPathExtension().lastPathComponent+".o"
+                objectFile = URL(fileURLWithPath: base)
+                    .appendingPathComponent(filename).path
+                if FileManager.default.fileExists(atPath: objectFile) {
+                    objectFile[#"([ $])"#] = "\\\\$1"
+                    located = true
+                    break
+                }
+            }
+            if !located {
+                log("ℹ️ Valid object path not found. Modify a file and build." +
+                    " Or add build setting \(EMIT_FRONTEND_COMMAND_LINES).")
+                return nil
+            }
         }
-        if replaced {
-            objectFile[#"([ $])"#] = "\\\\$1"
-        }
+
         Reloader.extractLinkCommand(from: finalCommand)
         if !dylink {
             return objectFile

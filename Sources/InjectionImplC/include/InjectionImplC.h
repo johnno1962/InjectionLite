@@ -10,6 +10,9 @@
 #define VAPOR_SYMBOL "$s10RoutingKit10ParametersVN"
 #define TCA_SYMBOL "_$s22ComposableArchitecture6LoggerCN"
 
+/// Build setting reauired for per-compilation logging since Xcode 16.3
+#define EMIT_FRONTEND_COMMAND_LINES "EMIT_FRONTEND_COMMAND_LINES"
+
 // Environment variables that can be used in schemes.
 /// IP or hostname of developer's machine for connecting from device.
 #define INJECTION_HOST "INJECTION_HOST"

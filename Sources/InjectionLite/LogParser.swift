@@ -11,16 +11,7 @@
 //  Created by John Holdsworth on 25/02/2023.
 //
 #if DEBUG || !SWIFT_PACKAGE
-#if canImport(InjectionImpl)
-import InjectionBazel
-import InjectionImpl
-#endif
 import Foundation
-#if canImport(PopenD)
-import PopenD
-#else
-import Popen
-#endif
 
 struct LogParser: LiteParser {
 
@@ -43,32 +34,38 @@ struct LogParser: LiteParser {
             .replacingOccurrences(of: #"([$*&])"#, with: #"\\\\"#+triplesc,
                                   options: .regularExpression)
         let option = isSwift ? "-primary-file" : "-c"
-        let scanner = """
+        let platformRestrict = isSwift && platformFilter != "" ?
+            "| /usr/bin/grep \(platformFilter)" : "",
+            scanner = """
             cd "\(logsDir)" && for log in `/bin/ls -t *.xcactivitylog`; do \
                 if /usr/bin/gunzip <$log | /usr/bin/tr '\\r' '\\n' | \
                     /usr/bin/grep -v builtin-ScanDependencies | /usr/bin/grep -v llvmcas:// | \
-                    /usr/bin/grep " \(option) \(escaped) " \(isSwift &&
-                    platformFilter != "" ? "| /usr/bin/grep \(platformFilter)" : ""); \
+                    /usr/bin/grep " \(option) \(escaped) " \(platformRestrict); \
                 then echo $log && exit; fi; done
             """,
-            xCode26_3 = """
+            builtinSwiftc = #"builtin-Swift-Compilation"#, xCode26_3 = """
             cd "\(logsDir)" && for log in `/bin/ls -t *.xcactivitylog`; do \
                 if /usr/bin/gunzip <$log | /usr/bin/tr '\\r' '\\n' | \
-                    /usr/bin/grep builtin-Swift-Compilation | \
-                    /usr/bin/grep " -module-name \(Reloader.appName) " \(isSwift &&
-                    platformFilter != "" ? "| /usr/bin/grep \(platformFilter)" : ""); \
+                    /usr/bin/grep \(builtinSwiftc) | \
+                    /usr/bin/grep " -module-name \(Reloader.appName) " \(platformRestrict); \
                 then exit; fi; exit; done
             """
 
         let scanning = Popen(cmd: scanner)
-        guard let command = scanning?.readLine() ?? (getenv("XCODE_263") != nil ?
+        guard let command = scanning?.readLine() ?? (true || getenv("XCODE_263") != nil ?
                Popen(cmd: xCode26_3)?.readLine() : nil) else {
             log("Log scanning failed: "+scanner)
-            log("With Xcode 16.3+, have you tried adding build setting EMIT_FRONTEND_COMMAND_LINES?")
+            if !logsDir.contains(Reloader.appName) {
+                log("⚠️ logsDir seems to be incorrect. Modify a file and rebuild.")
+            }
+            log("ℹ️ With Xcode 16.3+, have you tried adding build setting \(EMIT_FRONTEND_COMMAND_LINES)?")
             return nil
         }
 
         found = (logsDir, scanning)
+        if command[builtinSwiftc] {
+            return command
+        }
 
         return makeSinglePrimary(source: source, command) +
             (isSwift ? "" : " -Xclang -fno-validate-pch")

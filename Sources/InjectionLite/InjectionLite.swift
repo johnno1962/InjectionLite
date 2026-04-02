@@ -12,9 +12,7 @@
 
 #if DEBUG || !SWIFT_PACKAGE
 import Foundation
-#if canImport(InjectionImplC)
-import InjectionImplC
-import InjectionImpl
+#if canImport(InjectionImpl)
 import DLKitD
 #endif
 

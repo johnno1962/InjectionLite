@@ -14,10 +14,6 @@
 //
 #if DEBUG || !SWIFT_PACKAGE
 import Foundation
-#if canImport(InjectionImpl)
-import InjectionImplC
-import InjectionImpl
-#endif
 
 public class FileWatcher: NSObject {
     public typealias InjectionCallback = (_ filesChanged: [String]) -> Void
@@ -31,11 +27,10 @@ public class FileWatcher: NSObject {
             UserDefaults.standard.set(derivedLog, forKey: logsPref)
         }
     }
-    static var defaultBase = UserDefaults.standard.string(forKey: basePref)
-    static var objectsBase = defaultBase {
+    static var objectsBase = UserDefaults.standard.string(forKey: basePref) {
         didSet {
             UserDefaults.standard.set(objectsBase, forKey: basePref)
-            print(APP_PREFIX+" objectsBase: "+objectsBase!)
+            print(APP_PREFIX+" Received objectsBase: "+objectsBase!)
             objectBases.insert(objectsBase!)
         }
     }
@@ -130,7 +125,7 @@ public class FileWatcher: NSObject {
         var changed = Set<String>()
         for path in changes {
             guard let path = path as? String else { continue }
-            if path.hasSuffix(".o") {
+            if path.hasSuffix(".o") && !path.contains(APP_NAME) {
                 let base = URL(fileURLWithPath: path)
                     .deletingLastPathComponent()
                 if base.lastPathComponent == Reloader.arch,
@@ -141,12 +136,13 @@ public class FileWatcher: NSObject {
             }
             #if !INJECTION_III_APP
             if path.hasSuffix(".xcactivitylog") &&
-                path.contains("/Logs/Build/") {
+                path.contains("/Logs/Build/") &&
+                !path.contains(APP_NAME) {
                 // New custom DerivedData takes precedence
                 if (!path.contains("/Xcode/DerivedData/") ||
                     Self.derivedLog == Self.defaultLog ||
                     Self.derivedLog?.contains("/Xcode/DerivedData/") != false) {
-//                    print("Setting derivedLog: "+path)
+                    print(APP_PREFIX+" Setting derivedLog: "+path)
                     Self.derivedLog = path
                 }
             }
