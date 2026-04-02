@@ -14,6 +14,8 @@
 import Foundation
 
 struct LogParser: LiteParser {
+    
+    static let builtinSwiftCompile = #"builtin-Swift-Compilation --"#
 
     /// "grep" the most recent build log for the command to recompile a file
     func command(for source: String, platformFilter: String = "",
@@ -43,16 +45,16 @@ struct LogParser: LiteParser {
                     /usr/bin/grep " \(option) \(escaped) " \(platformRestrict); \
                 then echo $log && exit; fi; done
             """,
-            builtinSwiftc = #"builtin-Swift-Compilation"#, xCode26_3 = """
+            xCode26_3 = """
             cd "\(logsDir)" && for log in `/bin/ls -t *.xcactivitylog`; do \
                 if /usr/bin/gunzip <$log | /usr/bin/tr '\\r' '\\n' | \
-                    /usr/bin/grep \(builtinSwiftc) | \
+                    /usr/bin/grep "\(Self.builtinSwiftCompile)" | \
                     /usr/bin/grep " -module-name \(Reloader.appName) " \(platformRestrict); \
                 then exit; fi; exit; done
             """
 
         let scanning = Popen(cmd: scanner)
-        guard let command = scanning?.readLine() ?? (true || getenv("XCODE_263") != nil ?
+        guard let command = scanning?.readLine() ?? (getenv("NO_BUILTIN") == nil ?
                Popen(cmd: xCode26_3)?.readLine() : nil) else {
             log("Log scanning failed: "+scanner)
             if !logsDir.contains(Reloader.appName) {
@@ -63,7 +65,7 @@ struct LogParser: LiteParser {
         }
 
         found = (logsDir, scanning)
-        if command[builtinSwiftc] {
+        if command.contains(Self.builtinSwiftCompile) {
             return command
         }
 

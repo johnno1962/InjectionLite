@@ -21,20 +21,21 @@ public class FileWatcher: NSObject {
         pattern: "[^~]\\.(mm?|cpp|swift|storyboard|xib|o)$")
 
     static let logsPref = "HotReloadingBuildLogsDir", basePref = "appObjectBase"
-    static var defaultLog = UserDefaults.standard.string(forKey: logsPref)
+    static let defaultLog = UserDefaults.standard.string(forKey: logsPref)
     static var derivedLog = defaultLog {
         didSet {
             UserDefaults.standard.set(derivedLog, forKey: logsPref)
         }
     }
-    static var objectsBase = UserDefaults.standard.string(forKey: basePref) {
+    static let defaultBase = UserDefaults.standard.string(forKey: basePref)
+    static var objectsBase = defaultBase {
         didSet {
             UserDefaults.standard.set(objectsBase, forKey: basePref)
             print(APP_PREFIX+" Received objectsBase: "+objectsBase!)
             objectBases.insert(objectsBase!)
         }
     }
-    static var objectBases = Set<String>()
+    static var objectBases = Set<String>([defaultBase ?? "nil"])
 
     var initStream: ((FSEventStreamEventId) -> Void)!
     var eventsStart =
@@ -125,21 +126,21 @@ public class FileWatcher: NSObject {
         var changed = Set<String>()
         for path in changes {
             guard let path = path as? String else { continue }
-            if path.hasSuffix(".o") && !path.contains(APP_NAME) {
+            if path.hasSuffix(".o") && strstr(path, APP_NAME) == nil {
                 let base = URL(fileURLWithPath: path)
                     .deletingLastPathComponent()
                 if base.lastPathComponent == Reloader.arch,
-                   Self.objectsBase != base.path || Self.objectBases.isEmpty {
+                   Self.objectsBase != base.path {
                     Self.objectsBase = base.path
                 }
                 continue
             }
             #if !INJECTION_III_APP
             if path.hasSuffix(".xcactivitylog") &&
-                path.contains("/Logs/Build/") &&
-                !path.contains(APP_NAME) {
+                strstr(path, "/Logs/Build/") != nil &&
+                strstr(path, APP_NAME) == nil {
                 // New custom DerivedData takes precedence
-                if (!path.contains("/Xcode/DerivedData/") ||
+                if (strstr(path, "/Xcode/DerivedData/") == nil ||
                     Self.derivedLog == Self.defaultLog ||
                     Self.derivedLog?.contains("/Xcode/DerivedData/") != false) {
                     print(APP_PREFIX+" Setting derivedLog: "+path)

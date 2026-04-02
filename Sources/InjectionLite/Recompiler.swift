@@ -32,15 +32,6 @@ public struct Recompiler {
         return tmpdir+"eval\(Reloader.injectionNumber)"
     }
     
-    lazy var fallbackWarning: Void = {
-        log("""
-            ℹ️ Falling back to "builtin" compilation of files. \
-            This only works injecting files in the main package. \
-            It's better to add a project build setting \
-            \(EMIT_FRONTEND_COMMAND_LINES)=YES.
-            """)
-    }()
-    
     static var workspaceCache = [String: String]()
   
     func findParser(forProjectContaining source: String) -> LiteParser {
@@ -122,14 +113,12 @@ public struct Recompiler {
         var objectFile = tmpbase + ".o"
         unlink(objectFile)
         let benchmark = source.hasSuffix(".swift") ? Reloader.typeCheckLimit : ""
-        var isXcode26_3 = 0
-        withUnsafeMutablePointer(to: &isXcode26_3) {
-            command[#"\s*builtin(-\w+)+ --"#, count: $0] = ""
+        var builtinSwitftCompile = 0
+        withUnsafeMutablePointer(to: &builtinSwitftCompile) {
+            command[LogParser.builtinSwiftCompile, count: $0] = ""
         }
-//        command[#"-dependencies-(\d+)\.json"#] = "*"
-        let finalCommand = isXcode26_3 != 0 ? command[
-            #" -(const-\S+|use-save-temps)|-Xfrontend \S+_const_extract_protocols.json"#,
-            ""]+" -Xfrontend \(benchmark)" :
+        let finalCommand = builtinSwitftCompile != 0 ?
+            command[#"-use-frontend-parseable-output "#, ""]+" -Xfrontend \(benchmark)" :
             parser.prepareFinalCommand(
             command: command,
             source: source,
@@ -181,27 +170,35 @@ public struct Recompiler {
         }
         if longTermCache[cacheKey] as? String != command {
             longTermCache[cacheKey] = command
-            writeToCache()
+            if builtinSwitftCompile == 0 {
+                writeToCache()
+            }
         }
 
-        if isXcode26_3 != 0 {
-            _ = fallbackWarning
-            var located = false
-            for base in Reloader.injectionQueue
+        if builtinSwitftCompile != 0 {
+            log("""
+                ℹ️ Falling back to "builtin" compilation of files. \
+                This only works injecting files in the main package. \
+                Injection is faster if you add a build setting to \
+                your project: \(EMIT_FRONTEND_COMMAND_LINES)=YES \
+                then restart the \(APP_NAME) app.
+                """)
+            var located = false, filename = URL(fileURLWithPath: source)
+                .deletingPathExtension().lastPathComponent+".o"
+            for base in DispatchQueue.main
                 .sync(execute: { FileWatcher.objectBases }) {
-                let filename = URL(fileURLWithPath: source)
-                    .deletingPathExtension().lastPathComponent+".o"
-                objectFile = URL(fileURLWithPath: base)
+                let candidate = URL(fileURLWithPath: base)
                     .appendingPathComponent(filename).path
-                if FileManager.default.fileExists(atPath: objectFile) {
-                    objectFile[#"([ $])"#] = "\\\\$1"
+                if FileManager.default.fileExists(atPath: candidate) {
+                    print(APP_PREFIX+"Located object file "+candidate)
+                    objectFile = candidate[#"([ $()])"#, "\\\\$1"]
                     located = true
                     break
                 }
             }
             if !located {
-                log("ℹ️ Valid object path not found. Modify a file and build." +
-                    " Or add build setting \(EMIT_FRONTEND_COMMAND_LINES).")
+                log("⚠️ Valid object path not found. Modify a file and build." +
+                    " Or, add a build setting \(EMIT_FRONTEND_COMMAND_LINES).")
                 return nil
             }
         }
