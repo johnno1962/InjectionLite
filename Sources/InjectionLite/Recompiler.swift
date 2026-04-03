@@ -65,8 +65,8 @@ public struct Recompiler {
         var cachedCommand = getenv("NO_CACHING") == nil ?
             longTermCache[cacheKey] as? String : nil
         if cachedCommand?.contains("llvmcas://") == true {
-            log("⚠️ Injection is not compatable with build " +
-                "setting COMPILATION_CACHE_ENABLE_CACHING")
+            log("⚠️ Injection is not compatable with build" +
+                " setting COMPILATION_CACHE_ENABLE_CACHING")
             writeToCache(removing: cacheKey)
             cachedCommand = nil
         }
@@ -185,8 +185,7 @@ public struct Recompiler {
                 """)
             var located = false, filename = URL(fileURLWithPath: source)
                 .deletingPathExtension().lastPathComponent+".o"
-            for base in DispatchQueue.main
-                .sync(execute: { FileWatcher.objectBases }) {
+            for base in FileWatcher.objectBases {
                 let candidate = URL(fileURLWithPath: base)
                     .appendingPathComponent(filename).path
                 if FileManager.default.fileExists(atPath: candidate) {
@@ -198,7 +197,8 @@ public struct Recompiler {
             }
             if !located {
                 log("⚠️ Valid object path not found. Modify a file and build." +
-                    " Or, add a build setting \(EMIT_FRONTEND_COMMAND_LINES).")
+                    " Add a build setting \(EMIT_FRONTEND_COMMAND_LINES)=YES.")
+                writeToCache(removing: source)
                 return nil
             }
         }

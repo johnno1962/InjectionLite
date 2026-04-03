@@ -12,24 +12,26 @@
 
 #if DEBUG || !SWIFT_PACKAGE
 import Foundation
-#if canImport(InjectionImpl)
-import DLKitD
-#endif
 
 @objc(InjectionLite)
 open class InjectionLite: InjectionBase {
+    static var cacheLock = os_unfair_lock()
     var recompiler = Recompiler()
     var reloader = Reloader()
 
     override func inject(source: String) {
+        _ = Self.cacheLock
+        os_unfair_lock_lock(&Self.cacheLock)
         let usingCached = recompiler.longTermCache[source] != nil
         if let dylib = recompiler.recompile(source: source, dylink: true),
            let (image, classes) = reloader.loadAndPatch(in: dylib) {
             reloader.sweeper.sweepAndRunTests(image: image, classes: classes)
         } else if usingCached { // Try again once, after reparsing logs.
             recompiler.writeToCache(removing: source)
-            inject(source: source)
+            os_unfair_lock_unlock(&Self.cacheLock)
+            return inject(source: source)
         }
+        os_unfair_lock_unlock(&Self.cacheLock)
     }
 }
 #endif

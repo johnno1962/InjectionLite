@@ -32,7 +32,10 @@ public class FileWatcher: NSObject {
         didSet {
             UserDefaults.standard.set(objectsBase, forKey: basePref)
             print(APP_PREFIX+" Received objectsBase: "+objectsBase!)
-            objectBases.insert(objectsBase!)
+            if let objectsBase = objectsBase,
+               !objectBases.contains(objectsBase) {
+                objectBases.insert(objectsBase)
+            }
         }
     }
     static var objectBases = Set<String>([defaultBase ?? "nil"])

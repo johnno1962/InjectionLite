@@ -99,6 +99,11 @@ public struct Reloader {
                 ℹ️ To inject a MacOS app you'll need to "Disable Library \
                 Validation" under the "Hardened runtime" during developemnt.
                 """)
+            } else if msg.contains("code signature invalid in") {
+                tmplog("""
+                ⚠️ Code signature invalid. Have you selected the correct \
+                codesigning identity in the "Enable Devices" popup?
+                """)
             }
         }
 
