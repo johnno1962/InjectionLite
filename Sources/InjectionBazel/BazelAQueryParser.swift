@@ -115,19 +115,225 @@ public class BazelAQueryParser: LiteParser {
         return optimizedCommand
     }
     
+    /// Bazel output base, resolved lazily from the workspace `bazel-out` symlink.
+    /// In Bazel 7+/Bzlmod the layout is:
+    ///   <outputBase>/execroot/_main/bazel-out/...   (build artifacts)
+    ///   <outputBase>/external/...                   (external repos)
+    private lazy var bazelOutputBase: String = {
+        let bazelOutLink = "\(workspaceRoot)/bazel-out"
+        if let resolved = try? FileManager.default.destinationOfSymbolicLink(atPath: bazelOutLink) {
+            let url = URL(fileURLWithPath: resolved)
+            return url.deletingLastPathComponent()
+                       .deletingLastPathComponent()
+                       .deletingLastPathComponent().path
+        }
+        return workspaceRoot
+    }()
+
+    private lazy var execRoot: String = {
+        let bazelOutLink = "\(workspaceRoot)/bazel-out"
+        if let resolved = try? FileManager.default.destinationOfSymbolicLink(atPath: bazelOutLink) {
+            let url = URL(fileURLWithPath: resolved)
+            return url.deletingLastPathComponent().path
+        }
+        return workspaceRoot
+    }()
+
+    // MARK: - rules_xcodeproj Support
+
+    /// Detects whether rules_xcodeproj is in use and resolves the alternative
+    /// output base where Xcode-triggered builds actually place artifacts.
+    private lazy var rulesXcodeprojExecRoot: String? = {
+        let rxpOutputBase = bazelOutputBase + "/rules_xcodeproj.noindex/build_output_base"
+        let rxpExecRoot = rxpOutputBase + "/execroot/_main"
+        guard FileManager.default.fileExists(atPath: rxpExecRoot) else {
+            return nil
+        }
+        log("📦 Detected rules_xcodeproj output base at: \(rxpOutputBase)")
+        return rxpExecRoot
+    }()
+
+    private lazy var rulesXcodeprojOutputBase: String? = {
+        guard rulesXcodeprojExecRoot != nil else { return nil }
+        return bazelOutputBase + "/rules_xcodeproj.noindex/build_output_base"
+    }()
+
+    /// Cache of aquery config → rules_xcodeproj config directory mappings.
+    /// e.g. "ios_sim_arm64-fastbuild-ST-abc123" → "ios_sim_arm64-dbg-ios-sim_arm64-min17.0-ST-xyz789"
+    private var configMappingCache = [String: String]()
+
+    /// Maps an aquery configuration directory name to the corresponding
+    /// directory in the rules_xcodeproj output base.
+    ///
+    /// Config format: `<arch>-<mode>[-exec]-<suffix>-ST-<hash>`
+    /// e.g. aquery target:  `ios_sim_arm64-fastbuild-ios-sim_arm64-min17.0-ST-538543d366db`
+    ///      rxp target:     `ios_sim_arm64-dbg-ios-sim_arm64-min17.0-ST-37293c460a5a`
+    ///      aquery exec:    `darwin_arm64-opt-exec-ST-d57f47055a04`
+    ///      rxp exec:       `darwin_arm64-opt-exec-ST-d57f47055a04`  (often identical hash)
+    private func resolveRxpConfig(for aqueryConfig: String) -> String? {
+        if let cached = configMappingCache[aqueryConfig] {
+            return cached
+        }
+        guard let rxpExecRoot = rulesXcodeprojExecRoot else { return nil }
+        let rxpBazelOut = rxpExecRoot + "/bazel-out"
+
+        guard let entries = try? FileManager.default
+                .contentsOfDirectory(atPath: rxpBazelOut) else { return nil }
+
+        // 1) Exact match (exec configs often share the same hash)
+        if entries.contains(aqueryConfig) {
+            log("🔗 Exact match for aquery config '\(aqueryConfig)' in rxp")
+            configMappingCache[aqueryConfig] = aqueryConfig
+            return aqueryConfig
+        }
+
+        let (archPrefix, modeQualifier) = extractArchAndMode(from: aqueryConfig)
+
+        // 2) Match by arch + mode qualifier (e.g. darwin_arm64 + opt-exec)
+        let candidates = entries
+            .filter {
+                let (entryArch, entryMode) = extractArchAndMode(from: $0)
+                return entryArch == archPrefix && entryMode == modeQualifier
+            }
+            .sorted { $0 > $1 }
+
+        if let match = candidates.first {
+            log("🔗 Mapped aquery config '\(aqueryConfig)' → rxp config '\(match)' (mode: \(modeQualifier))")
+            configMappingCache[aqueryConfig] = match
+            return match
+        }
+
+        // 3) For target configs (fastbuild), fall back to dbg with same arch
+        if modeQualifier == "fastbuild" {
+            let dbgCandidates = entries
+                .filter {
+                    let (entryArch, entryMode) = extractArchAndMode(from: $0)
+                    return entryArch == archPrefix && entryMode == "dbg"
+                }
+                .sorted { $0 > $1 }
+
+            if let match = dbgCandidates.first {
+                log("🔗 Mapped aquery config '\(aqueryConfig)' → rxp config '\(match)' (fastbuild→dbg)")
+                configMappingCache[aqueryConfig] = match
+                return match
+            }
+        }
+
+        // 4) Last resort: any config with the same arch prefix
+        let anyMatch = entries
+            .filter { extractArchAndMode(from: $0).arch == archPrefix }
+            .sorted { $0 > $1 }
+            .first
+
+        if let match = anyMatch {
+            log("⚠️ Loose match for '\(aqueryConfig)' → rxp config '\(match)'")
+            configMappingCache[aqueryConfig] = match
+            return match
+        }
+
+        log("⚠️ No rules_xcodeproj config matching '\(aqueryConfig)' in \(rxpBazelOut)")
+        return nil
+    }
+
+    /// Extracts the architecture prefix and mode qualifier from a Bazel config.
+    /// e.g. `ios_sim_arm64-fastbuild-...` → (`ios_sim_arm64`, `fastbuild`)
+    ///      `darwin_arm64-opt-exec-ST-...` → (`darwin_arm64`, `opt-exec`)
+    ///      `darwin_arm64-dbg-ST-...` → (`darwin_arm64`, `dbg`)
+    private func extractArchAndMode(from config: String) -> (arch: String, mode: String) {
+        // Order matters: check compound modes first
+        let modeTokens = ["-fastbuild-", "-opt-exec-", "-dbg-", "-opt-"]
+        let modeNames  = ["fastbuild",   "opt-exec",   "dbg",   "opt"]
+        for (token, mode) in zip(modeTokens, modeNames) {
+            if let range = config.range(of: token) {
+                return (String(config[config.startIndex..<range.lowerBound]), mode)
+            }
+        }
+        return (config.components(separatedBy: "-").first ?? config, "unknown")
+    }
+
+    /// Distinct filesystem spellings of the main workspace execroot (`…/execroot/_main`),
+    /// so absolute paths in aquery output match even with symlink / normalization drift.
+    private func mainExecRootPathVariants() -> [String] {
+        let outputBaseExec = bazelOutputBase + "/execroot/_main"
+        var roots = Set<String>()
+        roots.insert(execRoot)
+        roots.insert(outputBaseExec)
+        roots.insert((execRoot as NSString).standardizingPath)
+        roots.insert((outputBaseExec as NSString).standardizingPath)
+        roots.insert(URL(fileURLWithPath: execRoot).resolvingSymlinksInPath().path)
+        roots.insert(URL(fileURLWithPath: outputBaseExec).resolvingSymlinksInPath().path)
+        return roots.filter { !$0.isEmpty }
+    }
+
+    /// Rewrites all `bazel-out/<config>/` path segments in a command so they
+    /// point to the rules_xcodeproj output base with the correct config hash.
+    ///
+    /// aquery lines use the default output base (`fastbuild`, etc.). Xcode-driven
+    /// rules_xcodeproj builds use `…/rules_xcodeproj.noindex/build_output_base/`.
+    /// When paths are **absolute** (`…/execroot/_main/bazel-out/<cfg>/…`), replacing
+    /// only the `bazel-out/<cfg>/` fragment would splice the rxp execroot onto the
+    /// main execroot and break module map resolution — so longer absolute prefixes
+    /// are rewritten first, then relative `bazel-out/` segments.
+    private func rewritePathsForRulesXcodeproj(_ command: String) -> String {
+        guard let rxpExecRoot = rulesXcodeprojExecRoot else { return command }
+
+        var result = command
+        let pattern = #"bazel-out/([^/]+)/"#
+        guard let regex = try? NSRegularExpression(pattern: pattern) else { return command }
+
+        let nsRange = NSRange(result.startIndex..., in: result)
+        var configsSeen = Set<String>()
+        for match in regex.matches(in: result, range: nsRange) {
+            if let range = Range(match.range(at: 1), in: result) {
+                configsSeen.insert(String(result[range]))
+            }
+        }
+
+        for aqueryConfig in configsSeen {
+            guard let rxpConfig = resolveRxpConfig(for: aqueryConfig) else { continue }
+            let destination = "\(rxpExecRoot)/bazel-out/\(rxpConfig)/"
+
+            // 1) Absolute: …/execroot/_main/bazel-out/<aquery>/  (several spellings)
+            for execVariant in mainExecRootPathVariants() {
+                let oldAbs = "\(execVariant)/bazel-out/\(aqueryConfig)/"
+                result = result.replacingOccurrences(of: oldAbs, with: destination)
+            }
+
+            // 2) Relative to exec root (no directory prefix before bazel-out/)
+            result = result.replacingOccurrences(
+                of: "bazel-out/\(aqueryConfig)/",
+                with: destination)
+        }
+
+        return result
+    }
+
     public func prepareFinalCommand(command: String, source: String, objectFile: String, tmpdir: String, injectionNumber: Int) -> String {
+        let effectiveRoot = rulesXcodeprojExecRoot ?? execRoot
+        let cdPrefix = "cd '\(effectiveRoot)' && "
+
+        // Strip any existing -o flag so we can set our own output path
+        var cmd = command
+        if let regex = try? NSRegularExpression(pattern: #" -o (?:'[^']*'|"[^"]*"|[^\s\\]*(?:\\.[^\s\\]*)*)"#, options: []) {
+            let range = NSRange(cmd.startIndex..., in: cmd)
+            cmd = regex.stringByReplacingMatches(in: cmd, options: [], range: range, withTemplate: "")
+        }
+
+        // Replace -emit-object with -c so -o controls output path
+        cmd = cmd.replacingOccurrences(of: " -emit-object", with: " -c")
+
         // Check if this is a frontend command (already optimized)
-        if command.contains("swiftc -frontend") {
-            return command + " -o \(objectFile)"
+        if cmd.contains("swiftc -frontend") {
+            return cdPrefix + cmd + " -o \(objectFile)"
         }
         
         // For non-frontend commands, try output-file-map first
         let outputFileMapRegex = #" -output-file-map ([^\s\\]*(?:\\.[^\s\\]*)*)"#
-        if let outputFileMapPath = (command[outputFileMapRegex] as String?)?.unescape {
-            return createMinimalOutputFileMapCommand(command: command, source: source, objectFile: objectFile, outputFileMapPath: outputFileMapPath, tmpdir: tmpdir, injectionNumber: injectionNumber)
+        if let outputFileMapPath = (cmd[outputFileMapRegex] as String?)?.unescape {
+            return createMinimalOutputFileMapCommand(command: cmd, source: source, objectFile: objectFile, outputFileMapPath: outputFileMapPath, tmpdir: tmpdir, injectionNumber: injectionNumber)
         } else {
             // Traditional -o flag fallback
-            return command + " -o \(objectFile)"
+            return cmd + " -o \(objectFile)"
         }
     }
     
@@ -164,6 +370,13 @@ public class BazelAQueryParser: LiteParser {
         // Remove output-file-map since frontend mode will use -o instead
         let outputFileMapRegex = #" -output-file-map ([^\s\\]*(?:\\.[^\s\\]*)*)"#
         if let regex = try? NSRegularExpression(pattern: outputFileMapRegex, options: []) {
+            let range = NSRange(cleanedCommand.startIndex..., in: cleanedCommand)
+            cleanedCommand = regex.stringByReplacingMatches(in: cleanedCommand, options: [], range: range, withTemplate: "")
+        }
+
+        // Remove existing -o flags so prepareFinalCommand can set the correct output path
+        let existingOutputRegex = #" -o (?:'[^']*'|"[^"]*"|[^\s\\]*(?:\\.[^\s\\]*)*)"#
+        if let regex = try? NSRegularExpression(pattern: existingOutputRegex, options: []) {
             let range = NSRange(cleanedCommand.startIndex..., in: cleanedCommand)
             cleanedCommand = regex.stringByReplacingMatches(in: cleanedCommand, options: [], range: range, withTemplate: "")
         }
@@ -210,6 +423,13 @@ public class BazelAQueryParser: LiteParser {
     private func cleanBazelCommand(_ command: String) -> String {
         var cleanedCommand = command
         
+        // Strip Bazel worker binary prefix: the aquery command starts with
+        // something like "/path/to/worker swiftc ..." — the worker binary
+        // uses a protobuf stdin protocol and can't be invoked directly.
+        if let workerRange = cleanedCommand.range(of: #"[^\s]*worker\s+"#, options: .regularExpression) {
+            cleanedCommand.removeSubrange(cleanedCommand.startIndex..<workerRange.upperBound)
+        }
+        
         // Remove Bazel-specific flags that interfere with hot reloading
         let flagsToRemove = [
             "-const-gather-protocols-file",
@@ -220,6 +440,18 @@ public class BazelAQueryParser: LiteParser {
             "-module-cache-path",
             "-num-threads"
         ]
+        
+        // WMO prevents single-file recompilation — the compiler silently
+        // skips -primary-file / -emit-object when WMO is active.
+        let standaloneFlags = [
+            "-whole-module-optimization",
+            "-internalize-at-link",
+            "-no-serialize-debugging-options",
+        ]
+        for flag in standaloneFlags {
+            cleanedCommand = cleanedCommand.replacingOccurrences(
+                of: flag, with: "")
+        }
         
         // Also remove -Xwrapped-swift flags which have a different pattern
         let xWrappedSwiftPattern = "\\s+'-Xwrapped-swift=[^']*'"
@@ -235,6 +467,61 @@ public class BazelAQueryParser: LiteParser {
             cleanedCommand = regex.stringByReplacingMatches(in: cleanedCommand, options: [], range: range, withTemplate: "")
         }
         
+        // Strip -Xfrontend wrapper since we invoke swift-frontend directly.
+        // The Bazel aquery command is already in frontend mode, so -Xfrontend
+        // is redundant and causes "unknown argument" errors.
+        while cleanedCommand.contains(" -Xfrontend ") {
+            cleanedCommand = cleanedCommand.replacingOccurrences(of: " -Xfrontend ", with: " ")
+        }
+        
+        // Strip the `cd "<execRoot>" &&` prefix that BazelActionQueryHandler
+        // embeds — prepareFinalCommand will add the correct one.
+        if let cdRange = cleanedCommand.range(
+            of: #"^cd \"[^\"]+\" && "#, options: .regularExpression) {
+            cleanedCommand.removeSubrange(cdRange)
+        }
+
+        // When rules_xcodeproj is in use, rewrite bazel-out/<config>/ paths
+        // to the correct output base with the matching config hash FIRST,
+        // before doing generic relative→absolute resolution.
+        cleanedCommand = rewritePathsForRulesXcodeproj(cleanedCommand)
+
+        // Choose the correct output base / execroot for external/ and bazel-out/
+        // resolution. For rules_xcodeproj, artifacts live in a separate output base.
+        let effectiveOutputBase = rulesXcodeprojOutputBase ?? bazelOutputBase
+        let effectiveExecRoot = rulesXcodeprojExecRoot ?? execRoot
+
+        // In Bazel 7+/Bzlmod, external repos live at <outputBase>/external/,
+        // NOT at <execroot>/_main/external/. Replace relative external/ refs
+        // with the absolute path so the compiler can find module maps and
+        // headers for third-party dependencies.
+        let absExternal = "\(effectiveOutputBase)/external/"
+        cleanedCommand = cleanedCommand.replacingOccurrences(
+            of: "=external/", with: "=\(absExternal)")
+        cleanedCommand = cleanedCommand.replacingOccurrences(
+            of: " external/", with: " \(absExternal)")
+        cleanedCommand = cleanedCommand.replacingOccurrences(
+            of: "'external/", with: "'\(absExternal)")
+
+        // bazel-out/ relative paths must also be resolved to absolute.
+        // After rewritePathsForRulesXcodeproj, any remaining bazel-out/ refs
+        // are ones that didn't match a config (or rules_xcodeproj isn't in use).
+        let absBazelOut = "\(effectiveExecRoot)/bazel-out/"
+        cleanedCommand = cleanedCommand.replacingOccurrences(
+            of: "=bazel-out/", with: "=\(absBazelOut)")
+        cleanedCommand = cleanedCommand.replacingOccurrences(
+            of: " bazel-out/", with: " \(absBazelOut)")
+        cleanedCommand = cleanedCommand.replacingOccurrences(
+            of: "'bazel-out/", with: "'\(absBazelOut)")
+
+        // Flags that concatenate the path directly (no space before the relative path)
+        for prefix in ["-F", "-I", "-iquote", "-isystem"] {
+            cleanedCommand = cleanedCommand.replacingOccurrences(
+                of: "\(prefix)external/", with: "\(prefix)\(absExternal)")
+            cleanedCommand = cleanedCommand.replacingOccurrences(
+                of: "\(prefix)bazel-out/", with: "\(prefix)\(absBazelOut)")
+        }
+
         // Replace Bazel placeholders in the command with actual values
         let finalCommand = replaceBazelPlaceholders(in: cleanedCommand)
         
@@ -460,13 +747,17 @@ public class BazelAQueryParser: LiteParser {
         // Split command into components, handling quoted arguments
         let components = parseCommandComponents(command)
         
-        // Find Swift files (ending with .swift) but ignore flags starting with dash
+        let pathArgFlags: Set<String> = ["-F", "-I", "-iquote", "-isystem", "-Xcc"]
+        var previousComponent = ""
         for component in components {
             let cleanPath = component.trimmingCharacters(in: CharacterSet(charactersIn: "\"'"))
-            
-            if cleanPath.hasSuffix(".swift") && !cleanPath.hasPrefix("-") {
+            let cleanPrev = previousComponent.trimmingCharacters(in: CharacterSet(charactersIn: "\"'"))
+
+            if cleanPath.hasSuffix(".swift") && !cleanPath.hasPrefix("-")
+                && !pathArgFlags.contains(cleanPrev) {
                 swiftFiles.append(cleanPath)
             }
+            previousComponent = component
         }
         
         // Filter out the changed file to create list of other files
@@ -588,13 +879,13 @@ public class BazelAQueryParser: LiteParser {
         
         // Step 2: Remove all .swift files from the command
         for swiftFile in allFiles {
-            // Handle both quoted and unquoted file paths
-            let quotedFile = "\"\(swiftFile)\""
+            let escaped = NSRegularExpression.escapedPattern(for: swiftFile)
+            let doubleQuoted = NSRegularExpression.escapedPattern(for: "\"\(swiftFile)\"")
+            let singleQuoted = NSRegularExpression.escapedPattern(for: "'\(swiftFile)'")
             let patterns = [
-                " \(swiftFile)(?=\\s|$)",
-                " \(quotedFile)(?=\\s|$)",
-                "\\s+\(NSRegularExpression.escapedPattern(for: swiftFile))(?=\\s|$)",
-                "\\s+\(NSRegularExpression.escapedPattern(for: quotedFile))(?=\\s|$)"
+                "\\s+\(singleQuoted)(?=\\s|$)",
+                "\\s+\(doubleQuoted)(?=\\s|$)",
+                "\\s+\(escaped)(?=\\s|$)",
             ]
             
             for pattern in patterns {
@@ -606,7 +897,8 @@ public class BazelAQueryParser: LiteParser {
         }
         
         // Step 3: Add -primary-file with the changed file
-        transformedCommand += " -primary-file \(primaryFile)"
+        let quotedPrimary = primaryFile.contains(" ") ? "'\(primaryFile)'" : primaryFile
+        transformedCommand += " -primary-file \(quotedPrimary)"
 
         // Step 4: Add plugin paths for system macros
 
@@ -621,7 +913,8 @@ public class BazelAQueryParser: LiteParser {
 
         // Step 5: Add other Swift files as secondary sources (using cleaned list)
         for otherFile in cleanOtherFiles {
-            transformedCommand += " \(otherFile)"  
+            let quoted = otherFile.contains(" ") ? "'\(otherFile)'" : otherFile
+            transformedCommand += " \(quoted)"
         }
         
         return transformedCommand
@@ -634,28 +927,28 @@ public class BazelAQueryParser: LiteParser {
         
         var adjustedCommand = command
         
-        // Find and replace existing -primary-file argument
-        let primaryFilePattern = #" -primary-file ([^\s\\]*(?:\\.[^\s\\]*)*)"#
+        // Find and replace existing -primary-file argument (handles unquoted, single-quoted, and double-quoted paths)
+        let primaryFilePattern = #" -primary-file (?:'[^']*'|"[^"]*"|[^\s\\]*(?:\\.[^\s\\]*)*)"#
         if let regex = try? NSRegularExpression(pattern: primaryFilePattern, options: []) {
             let range = NSRange(adjustedCommand.startIndex..., in: adjustedCommand)
             let matches = regex.matches(in: adjustedCommand, options: [], range: range)
             
             if let match = matches.first, let matchRange = Range(match.range, in: adjustedCommand) {
-                // Replace the entire -primary-file argument
                 let oldPrimaryFile = String(adjustedCommand[matchRange])
-                adjustedCommand = adjustedCommand.replacingOccurrences(of: oldPrimaryFile, with: " -primary-file \(newPrimaryFile)")
+                let quotedNew = newPrimaryFile.contains(" ") ? "'\(newPrimaryFile)'" : newPrimaryFile
+                adjustedCommand = adjustedCommand.replacingOccurrences(of: oldPrimaryFile, with: " -primary-file \(quotedNew)")
                 log("🔄 Replaced primary file in existing frontend command")
                 log("   Old: \(oldPrimaryFile)")
                 log("   New: -primary-file \(URL(fileURLWithPath: newPrimaryFile).lastPathComponent)")
             }
         } else {
-            // If no -primary-file found, add it
-            adjustedCommand += " -primary-file \(newPrimaryFile)"
+            let quotedNew = newPrimaryFile.contains(" ") ? "'\(newPrimaryFile)'" : newPrimaryFile
+            adjustedCommand += " -primary-file \(quotedNew)"
             log("➕ Added -primary-file to existing frontend command")
         }
         
-        // Remove existing -o flag since prepareFinalCommand will add the correct one
-        let outputPattern = #" -o ([^\s\\]*(?:\\.[^\s\\]*)*)"#
+        // Remove existing -o flag since prepareFinalCommand will add the correct one (handles quoted paths)
+        let outputPattern = #" -o (?:'[^']*'|"[^"]*"|[^\s\\]*(?:\\.[^\s\\]*)*)"#
         if let regex = try? NSRegularExpression(pattern: outputPattern, options: []) {
             let range = NSRange(adjustedCommand.startIndex..., in: adjustedCommand)
             let matches = regex.matches(in: adjustedCommand, options: [], range: range)

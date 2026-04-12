@@ -13,12 +13,17 @@
 //
 
 #if DEBUG || !SWIFT_PACKAGE
-#if canImport(InjectionImpl)
-@_exported import InjectionBazel
-@_exported import InjectionImplC
-@_exported import InjectionImpl
+#if canImport(InjectionImplC)
+import InjectionImplC
+import InjectionBazel
+import InjectionImpl
 #endif
 import Foundation
+#if canImport(PopenD)
+import PopenD
+#else
+import Popen
+#endif
 
 public struct Recompiler {
 
@@ -62,11 +67,10 @@ public struct Recompiler {
         var scanned: (logDir: String, scanner: Popen?)?
         let cacheKey = source+platformFilter
         self.cacheKey = cacheKey
-        var cachedCommand = getenv("NO_CACHING") == nil ?
-            longTermCache[cacheKey] as? String : nil
+        var cachedCommand = longTermCache[cacheKey] as? String
         if cachedCommand?.contains("llvmcas://") == true {
-            log("⚠️ Injection is not compatable with build" +
-                " setting COMPILATION_CACHE_ENABLE_CACHING")
+            log("⚠️ Injection is not compatable with build " +
+                "setting COMPILATION_CACHE_ENABLE_CACHING")
             writeToCache(removing: cacheKey)
             cachedCommand = nil
         }
@@ -110,16 +114,10 @@ public struct Recompiler {
         log("🔄 [\(fileName)] Recompiling\(platformFilter.isEmpty ? "" : " (\(platformFilter))")")
 
         Reloader.injectionNumber += 1
-        var objectFile = tmpbase + ".o"
+        let objectFile = tmpbase + ".o"
         unlink(objectFile)
         let benchmark = source.hasSuffix(".swift") ? Reloader.typeCheckLimit : ""
-        var builtinSwitftCompile = 0
-        withUnsafeMutablePointer(to: &builtinSwitftCompile) {
-            command[LogParser.builtinSwiftCompile, count: $0] = ""
-        }
-        let finalCommand = builtinSwitftCompile != 0 ?
-            command[#"-use-frontend-parseable-output "#, ""]+" -Xfrontend \(benchmark)" :
-            parser.prepareFinalCommand(
+        let finalCommand = parser.prepareFinalCommand(
             command: command,
             source: source,
             objectFile: objectFile,
@@ -148,8 +146,9 @@ public struct Recompiler {
 
 //            if !errors.contains(" error: ") { break }
             if !errors.contains("error: ") { break }
+            let wasCached = longTermCache[cacheKey] != nil
             writeToCache(removing: cacheKey)
-            if cachedCommand != nil { // retry once
+            if wasCached { // retry once
                 return recompile(source: source, platformFilter:
                                     platformFilter, dylink: dylink)
             }
@@ -170,37 +169,7 @@ public struct Recompiler {
         }
         if longTermCache[cacheKey] as? String != command {
             longTermCache[cacheKey] = command
-            if builtinSwitftCompile == 0 {
-                writeToCache()
-            }
-        }
-
-        if builtinSwitftCompile != 0 {
-            log("""
-                ℹ️ Falling back to "builtin" compilation of files. \
-                This only works injecting files in the main package. \
-                Injection is faster if you add a build setting to \
-                your project: \(EMIT_FRONTEND_COMMAND_LINES)=YES \
-                then restart the \(APP_NAME) app.
-                """)
-            var located = false, filename = URL(fileURLWithPath: source)
-                .deletingPathExtension().lastPathComponent+".o"
-            for base in FileWatcher.objectBases {
-                let candidate = URL(fileURLWithPath: base)
-                    .appendingPathComponent(filename).path
-                if FileManager.default.fileExists(atPath: candidate) {
-                    print(APP_PREFIX+"Located object file "+candidate)
-                    objectFile = candidate[#"([ $()])"#, "\\\\$1"]
-                    located = true
-                    break
-                }
-            }
-            if !located {
-                log("⚠️ Valid object path not found. Modify a file and build." +
-                    " Add a build setting \(EMIT_FRONTEND_COMMAND_LINES)=YES.")
-                writeToCache(removing: source)
-                return nil
-            }
+            writeToCache()
         }
 
         Reloader.extractLinkCommand(from: finalCommand)
