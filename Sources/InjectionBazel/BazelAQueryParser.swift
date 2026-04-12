@@ -314,7 +314,7 @@ public class BazelAQueryParser: LiteParser {
 
         // Strip any existing -o flag so we can set our own output path
         var cmd = command
-        if let regex = try? NSRegularExpression(pattern: #" -o (?:'[^']*'|"[^"]*"|[^\s\\]*(?:\\.[^\s\\]*)*)"#, options: []) {
+        if let regex = try? NSRegularExpression(pattern: Reloader.compilerOutputFlagRegex, options: []) {
             let range = NSRange(cmd.startIndex..., in: cmd)
             cmd = regex.stringByReplacingMatches(in: cmd, options: [], range: range, withTemplate: "")
         }
@@ -375,7 +375,7 @@ public class BazelAQueryParser: LiteParser {
         }
 
         // Remove existing -o flags so prepareFinalCommand can set the correct output path
-        let existingOutputRegex = #" -o (?:'[^']*'|"[^"]*"|[^\s\\]*(?:\\.[^\s\\]*)*)"#
+        let existingOutputRegex = Reloader.compilerOutputFlagRegex
         if let regex = try? NSRegularExpression(pattern: existingOutputRegex, options: []) {
             let range = NSRange(cleanedCommand.startIndex..., in: cleanedCommand)
             cleanedCommand = regex.stringByReplacingMatches(in: cleanedCommand, options: [], range: range, withTemplate: "")
@@ -928,7 +928,7 @@ public class BazelAQueryParser: LiteParser {
         var adjustedCommand = command
         
         // Find and replace existing -primary-file argument (handles unquoted, single-quoted, and double-quoted paths)
-        let primaryFilePattern = #" -primary-file (?:'[^']*'|"[^"]*"|[^\s\\]*(?:\\.[^\s\\]*)*)"#
+        let primaryFilePattern = Reloader.primaryFileFlagRegex
         if let regex = try? NSRegularExpression(pattern: primaryFilePattern, options: []) {
             let range = NSRange(adjustedCommand.startIndex..., in: adjustedCommand)
             let matches = regex.matches(in: adjustedCommand, options: [], range: range)
@@ -948,7 +948,7 @@ public class BazelAQueryParser: LiteParser {
         }
         
         // Remove existing -o flag since prepareFinalCommand will add the correct one (handles quoted paths)
-        let outputPattern = #" -o (?:'[^']*'|"[^"]*"|[^\s\\]*(?:\\.[^\s\\]*)*)"#
+        let outputPattern = Reloader.compilerOutputFlagRegex
         if let regex = try? NSRegularExpression(pattern: outputPattern, options: []) {
             let range = NSRange(adjustedCommand.startIndex..., in: adjustedCommand)
             let matches = regex.matches(in: adjustedCommand, options: [], range: range)
