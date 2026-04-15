@@ -85,6 +85,12 @@ extension Reloader {
 
     /// Regex for path argument, perhaps containg escaped spaces
     public static let argumentRegex = #"[^\s\\]*(?:\\.[^\s\\]*)*"#
+    /// Single-quoted, double-quoted, or unquoted shell token (backslash-escaped); extends `argumentRegex`.
+    public static let quotedArgumentRegex = #"(?:'[^']*'|"[^"]*"|\#(argumentRegex))"#
+    /// ` -o <path>` for stripping a prior compiler output before reinjection sets its own `-o`.
+    public static let compilerOutputFlagRegex = " -o " + quotedArgumentRegex
+    /// ` -primary-file <path>` with the same quoting rules as `-o`.
+    public static let primaryFileFlagRegex = " -primary-file " + quotedArgumentRegex
     /// Regex to extract filename base, perhaps containg escaped spaces
     public static let fileNameRegex = #"/(\#(argumentRegex))\.\w+"#
     /// Parse -sdk argument to extract sdk, Xcode path, platform

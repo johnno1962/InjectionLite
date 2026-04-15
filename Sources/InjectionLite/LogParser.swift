@@ -153,7 +153,13 @@ struct LogParser: LiteParser {
     }
 
     func prepareFinalCommand(command: String, source: String, objectFile: String, tmpdir: String, injectionNumber: Int) -> String {
-        command + " -o \(objectFile)"
+        var cmd = command
+        cmd = cmd.replacingOccurrences(of: " -emit-object", with: " -c")
+        if let regex = try? NSRegularExpression(pattern: Reloader.compilerOutputFlagRegex, options: []) {
+            let range = NSRange(cmd.startIndex..., in: cmd)
+            cmd = regex.stringByReplacingMatches(in: cmd, options: [], range: range, withTemplate: "")
+        }
+        return cmd + " -o \(objectFile)"
     }
 }
 #endif

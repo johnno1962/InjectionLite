@@ -22,6 +22,9 @@ import Foundation
 
 public struct Recompiler {
 
+    /// Host app hook for progress (e.g. MCP): basename, status (`compiling` / `compiled` / `failed`), optional detail.
+    public static var onCompilationEvent: ((_ file: String, _ status: String, _ detail: String?) -> Void)?
+
     /// A cache is kept of compiltaion commands in /tmp as Xcode housekeeps logs.
     lazy var longTermCache = NSMutableDictionary(contentsOfFile:
                     Reloader.cacheFile) ?? NSMutableDictionary()
@@ -108,6 +111,7 @@ public struct Recompiler {
 
         let fileName = URL(fileURLWithPath: source).lastPathComponent
         log("🔄 [\(fileName)] Recompiling\(platformFilter.isEmpty ? "" : " (\(platformFilter))")")
+        Self.onCompilationEvent?(fileName, "compiling", nil)
 
         Reloader.injectionNumber += 1
         var objectFile = tmpbase + ".o"
@@ -156,12 +160,15 @@ public struct Recompiler {
             log("Processing command: "+finalCommand+"\n")
             log("Current log: \(FileWatcher.derivedLog ?? "no log")")
             log("❌ Compilation failed:\n"+errors)
+            Self.onCompilationEvent?(fileName, "failed", "compilation error")
             return nil
         }
 
         // Log successful compilation with timing
         let compilationDuration = Date.timeIntervalSinceReferenceDate - compilationStartTime
         log(String(format: "⚡ Compiled in %.0fms", compilationDuration * 1000))
+        Self.onCompilationEvent?(fileName, "compiled",
+            String(format: "%.0fms", compilationDuration * 1000))
 
         if let frameworksArg: String = command[
             " -F (\(Reloader.argumentRegex)/PackageFrameworks) "] {
