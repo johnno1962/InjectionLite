@@ -36,6 +36,10 @@ public struct Recompiler {
     }
     
     static var workspaceCache = [String: String]()
+    /// One-shot: the builtin-compilation hint is actionable advice, not a
+    /// per-inject status line. Emit it once per process instead of on every
+    /// recompile.
+    static var warnedBuiltinFallback = false
   
     func findParser(forProjectContaining source: String) -> LiteParser {
         #if os(macOS)
@@ -183,13 +187,16 @@ public struct Recompiler {
         }
 
         if builtinSwitftCompile != 0 {
-            log("""
-                ℹ️ Falling back to "builtin" compilation of files. \
-                This only works injecting files in the main package. \
-                Injection is faster if you add a build setting to \
-                your project: \(EMIT_FRONTEND_COMMAND_LINES)=YES \
-                then restart the \(APP_NAME) app.
-                """)
+            if !Self.warnedBuiltinFallback {
+                Self.warnedBuiltinFallback = true
+                log("""
+                    ℹ️ Falling back to "builtin" compilation of files. \
+                    This only works injecting files in the main package. \
+                    Injection is faster if you add a build setting to \
+                    your project: \(EMIT_FRONTEND_COMMAND_LINES)=YES \
+                    then restart the \(APP_NAME) app.
+                    """)
+            }
             var located = false, filename = URL(fileURLWithPath: source)
                 .deletingPathExtension().lastPathComponent+".o"
             for base in FileWatcher.objectBases {
