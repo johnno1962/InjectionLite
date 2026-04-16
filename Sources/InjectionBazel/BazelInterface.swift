@@ -127,6 +127,12 @@ public class BazelInterface {
     private let workspaceRoot: String
     private let bazelExecutable: String
     private static let sourceToTargetCache = NSCache<NSString, NSString>()
+
+    /// Global kill-switch. When the user forces a non-Bazel build system
+    /// (e.g. `Build: Xcode` override in Settings), all Bazel detection and
+    /// parsing is skipped — `findWorkspaceRoot(containing:)` returns nil,
+    /// so `Recompiler.findParser` falls through to the log/Xcode path.
+    public static var isDisabled: Bool = false
     
     public init(workspaceRoot: String) throws {
         // Validate workspace
@@ -149,6 +155,7 @@ public class BazelInterface {
     // MARK: - Workspace Detection
     
     public static func findWorkspaceRoot(containing path: String) -> String? {
+        if isDisabled { return nil }
         let fm = FileManager.default
         // If we're handed the bundle itself (`Foo.xcodeproj` /
         // `Foo.xcworkspace`) start the walk at its parent so the
