@@ -101,7 +101,7 @@ struct LogParser: LiteParser {
         let escaped = escape(path: source)
         return command
             // Remove all output object files
-            .replacingOccurrences(of: " -o "+Reloader.fileNameRegex,
+            .replacingOccurrences(of: " -o "+Reloader.quotedArgumentRegex,
                                   with: " ", options: .regularExpression,
                                   range: NSMakeRange(0, command.length))
             // Strip out all per-primary-file options.
@@ -153,13 +153,7 @@ struct LogParser: LiteParser {
     }
 
     func prepareFinalCommand(command: String, source: String, objectFile: String, tmpdir: String, injectionNumber: Int) -> String {
-        var cmd = command
-        cmd = cmd.replacingOccurrences(of: " -emit-object", with: " -c")
-        if let regex = try? NSRegularExpression(pattern: Reloader.compilerOutputFlagRegex, options: []) {
-            let range = NSRange(cmd.startIndex..., in: cmd)
-            cmd = regex.stringByReplacingMatches(in: cmd, options: [], range: range, withTemplate: "")
-        }
-        return cmd + " -o \(objectFile)"
+        return command.replacingOccurrences(of: " -emit-object", with: " -c") + " -o \(objectFile)"
     }
 }
 #endif
