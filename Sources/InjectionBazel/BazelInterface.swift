@@ -150,16 +150,24 @@ public class BazelInterface {
     
     public static func findWorkspaceRoot(containing path: String) -> String? {
         let fm = FileManager.default
+        // If we're handed the bundle itself (`Foo.xcodeproj` /
+        // `Foo.xcworkspace`) start the walk at its parent so the
+        // internal `project.xcworkspace` doesn't trip the bail-out below.
         var currentPath = path
+        if currentPath.hasSuffix(".xcodeproj") || currentPath.hasSuffix(".xcworkspace") {
+            currentPath = (currentPath as NSString).deletingLastPathComponent
+        }
         // A file is only a Bazel target if it lives inside a Bazel package —
         // i.e. a BUILD/BUILD.bazel exists in an ancestor *strictly below* the
         // workspace root (BUILD at workspace root alone doesn't count: many
         // monorepos place a BUILD next to MODULE.bazel but keep unrelated
         // xcodeproj-based apps under their own subdirs).
         //
-        // Additionally, if we encounter an .xcodeproj / .xcworkspace on the
-        // way up *before* finding any BUILD file, the file is owned by that
-        // Xcode project — bail out early.
+        // If we encounter an .xcodeproj / .xcworkspace on the way up *before*
+        // finding any BUILD file AND without a BUILD co-located with it, the
+        // file is owned by that Xcode project — bail out. A BUILD next to the
+        // xcodeproj means it's a rules_xcodeproj-generated project, i.e. still
+        // Bazel-built.
         var sawBuildFile = false
 
         while currentPath != "/" && !currentPath.isEmpty {
@@ -179,23 +187,20 @@ public class BazelInterface {
                 return sawBuildFile ? currentPath : nil
             }
 
-            // Xcode project closer than the workspace root wins.
-            if let entries = try? fm.contentsOfDirectory(atPath: currentPath),
-               entries.contains(where: {
-                   $0.hasSuffix(".xcodeproj") || $0.hasSuffix(".xcworkspace")
-               }) {
+            let entries = (try? fm.contentsOfDirectory(atPath: currentPath)) ?? []
+            let hasBuildFile = entries.contains("BUILD") || entries.contains("BUILD.bazel")
+            let hasXcodeProject = entries.contains(where: {
+                $0.hasSuffix(".xcodeproj") || $0.hasSuffix(".xcworkspace")
+            })
+
+            // Xcode project closer than the workspace root wins, UNLESS a
+            // BUILD file is co-located (rules_xcodeproj-generated project).
+            if hasXcodeProject && !hasBuildFile && !sawBuildFile {
                 return nil
             }
 
-            if !sawBuildFile {
-                let buildFile = (currentPath as NSString)
-                    .appendingPathComponent("BUILD")
-                let buildBazelFile = (currentPath as NSString)
-                    .appendingPathComponent("BUILD.bazel")
-                if fm.fileExists(atPath: buildFile) ||
-                   fm.fileExists(atPath: buildBazelFile) {
-                    sawBuildFile = true
-                }
+            if hasBuildFile {
+                sawBuildFile = true
             }
 
             currentPath = (currentPath as NSString).deletingLastPathComponent
