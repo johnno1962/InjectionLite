@@ -129,10 +129,11 @@ public class FileWatcher: NSObject {
         var changed = Set<String>()
         for path in changes {
             guard let path = path as? String else { continue }
-            if path.hasSuffix(".o") && strstr(path, APP_NAME) == nil {
+            if path.hasSuffix(".o") {
                 let base = URL(fileURLWithPath: path)
                     .deletingLastPathComponent()
                 if base.lastPathComponent == Reloader.arch,
+                   strstr(path, APP_NAME) == nil,
                    Self.objectsBase != base.path {
                     Self.objectsBase = base.path
                 }
