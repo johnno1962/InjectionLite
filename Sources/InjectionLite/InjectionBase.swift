@@ -68,7 +68,8 @@ open class InjectionBase: NSObject {
                 }
             }
         }, runLoop: isVapor ? CFRunLoopGetCurrent() : nil)
-        log(APP_NAME+": Watching for source changes under \(dirs)/...")
+        log(APP_NAME+": Watching for source changes under " +
+            dirs.map { $0+"/..." }.joined(separator: ", "))
         if isVapor {
             CFRunLoopRun()
         }

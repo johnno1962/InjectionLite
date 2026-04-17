@@ -173,7 +173,19 @@ public class BazelActionQueryHandler {
     /// Find all iOS application targets in the workspace, sorted by package path length (shortest first)
     private func findAllAppTargets() throws -> [String] {
         log("🔍 Querying all iOS application targets in workspace")
-        
+
+        // Fast path: use known target from environment (set by make hot-reload or ControlServer)
+        if let envTarget = getenv("INJECTION_BAZEL_TARGET").map({ String(cString: $0) }),
+           !envTarget.isEmpty {
+            log("💾 Using INJECTION_BAZEL_TARGET env: \(envTarget)")
+            return [envTarget]
+        }
+        if let envTarget = getenv("INJECTION_APP_TARGET").map({ String(cString: $0) }),
+           !envTarget.isEmpty {
+            log("💾 Using INJECTION_APP_TARGET env: \(envTarget)")
+            return [envTarget]
+        }
+
         let query = "kind(ios_application, //...)"
         guard let output = Popen.task(exec: bazelExecutable,
                                      arguments: ["query", query],

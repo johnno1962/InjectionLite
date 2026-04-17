@@ -127,6 +127,12 @@ public class BazelInterface {
     private let workspaceRoot: String
     private let bazelExecutable: String
     private static let sourceToTargetCache = NSCache<NSString, NSString>()
+
+    /// Global kill-switch. When the user forces a non-Bazel build system
+    /// (e.g. `Build: Xcode` override in Settings), all Bazel detection and
+    /// parsing is skipped — `findWorkspaceRoot(containing:)` returns nil,
+    /// so `Recompiler.findParser` falls through to the log/Xcode path.
+    public static var isDisabled: Bool = false
     
     public init(workspaceRoot: String) throws {
         // Validate workspace
@@ -149,24 +155,64 @@ public class BazelInterface {
     // MARK: - Workspace Detection
     
     public static func findWorkspaceRoot(containing path: String) -> String? {
+        if isDisabled { return nil }
+        let fm = FileManager.default
+        // If we're handed the bundle itself (`Foo.xcodeproj` /
+        // `Foo.xcworkspace`) start the walk at its parent so the
+        // internal `project.xcworkspace` doesn't trip the bail-out below.
         var currentPath = path
-        
+        if currentPath.hasSuffix(".xcodeproj") || currentPath.hasSuffix(".xcworkspace") {
+            currentPath = (currentPath as NSString).deletingLastPathComponent
+        }
+        // A file is only a Bazel target if it lives inside a Bazel package —
+        // i.e. a BUILD/BUILD.bazel exists in an ancestor *strictly below* the
+        // workspace root (BUILD at workspace root alone doesn't count: many
+        // monorepos place a BUILD next to MODULE.bazel but keep unrelated
+        // xcodeproj-based apps under their own subdirs).
+        //
+        // If we encounter an .xcodeproj / .xcworkspace on the way up *before*
+        // finding any BUILD file AND without a BUILD co-located with it, the
+        // file is owned by that Xcode project — bail out. A BUILD next to the
+        // xcodeproj means it's a rules_xcodeproj-generated project, i.e. still
+        // Bazel-built.
+        var sawBuildFile = false
+
         while currentPath != "/" && !currentPath.isEmpty {
             let moduleFile = (currentPath as NSString).appendingPathComponent("MODULE.bazel")
             let modulePlainFile = (currentPath as NSString).appendingPathComponent("MODULE")
             let workspaceFile = (currentPath as NSString).appendingPathComponent("WORKSPACE")
             let workspaceBazelFile = (currentPath as NSString).appendingPathComponent("WORKSPACE.bazel")
-            
-            if FileManager.default.fileExists(atPath: moduleFile) ||
-               FileManager.default.fileExists(atPath: modulePlainFile) ||
-               FileManager.default.fileExists(atPath: workspaceFile) ||
-               FileManager.default.fileExists(atPath: workspaceBazelFile) {
-                return currentPath
+            let atWorkspaceRoot =
+                fm.fileExists(atPath: moduleFile) ||
+                fm.fileExists(atPath: modulePlainFile) ||
+                fm.fileExists(atPath: workspaceFile) ||
+                fm.fileExists(atPath: workspaceBazelFile)
+
+            if atWorkspaceRoot {
+                // BUILD at the workspace root itself doesn't qualify — we
+                // require evidence of a Bazel package *below* it.
+                return sawBuildFile ? currentPath : nil
             }
-            
+
+            let entries = (try? fm.contentsOfDirectory(atPath: currentPath)) ?? []
+            let hasBuildFile = entries.contains("BUILD") || entries.contains("BUILD.bazel")
+            let hasXcodeProject = entries.contains(where: {
+                $0.hasSuffix(".xcodeproj") || $0.hasSuffix(".xcworkspace")
+            })
+
+            // Xcode project closer than the workspace root wins, UNLESS a
+            // BUILD file is co-located (rules_xcodeproj-generated project).
+            if hasXcodeProject && !hasBuildFile && !sawBuildFile {
+                return nil
+            }
+
+            if hasBuildFile {
+                sawBuildFile = true
+            }
+
             currentPath = (currentPath as NSString).deletingLastPathComponent
         }
-        
+
         return nil
     }
 
