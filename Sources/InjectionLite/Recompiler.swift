@@ -211,7 +211,8 @@ public struct Recompiler {
             }
             if !located {
                 log("⚠️ Valid object path not found. Modify a file and build." +
-                    " Add a build setting \(EMIT_FRONTEND_COMMAND_LINES)=YES.")
+                    " Add a build setting \(EMIT_FRONTEND_COMMAND_LINES)=YES." +
+                    " Have you started a file watcher \(INJECTION_PROJECT_ROOT)=$(SRCROOT)")
                 writeToCache(removing: source)
                 return nil
             }

@@ -18,8 +18,10 @@
 #define INJECTION_HOST "INJECTION_HOST"
 /// Default list of directories fo watch, should include ~/Library/Developer.
 #define INJECTION_DIRECTORIES "INJECTION_DIRECTORIES"
-/// The root directory(s) to file watch of the project being injected.
+/// The root directory(s) to (auto-)file watch of the project being injected.
 #define INJECTION_PROJECT_ROOT "INJECTION_PROJECT_ROOT"
+/// Notification on injection as alternative to @objc func injected() method
+#define INJECTION_BUNDLE_NOTIFICATION "INJECTION_BUNDLE_NOTIFICATION"
 /// Preserve the value of top level and static variables over an injection.
 #define INJECTION_PRESERVE_STATICS "INJECTION_PRESERVE_STATICS"
 /// Directory containing Bazel workspace.
@@ -40,11 +42,13 @@
 #define INJECTION_KEYPATHS "INJECTION_KEYPATHS"
 /// Verbose logging of steps binding injected code into your app.
 #define INJECTION_DETAIL "INJECTION_DETAIL"
-/// Set bazel target to optimize source to bazel target matching
-#define INJECTION_BAZEL_TARGET "INJECTION_BAZEL_TARGET"
 /// Enable selected benchmarking of some operations.
 #define INJECTION_BENCH "INJECTION_BENCH"
 
+/// Remaining options relate to InjectionNext.app only.
+#define INJECTION_NEXT_VERSION "INJECTION_NEXT_VERSION"
+/// Flgas passed to dlopen() to open dynamic library.
+#define INJECTION_DLOPEN_MODE "INJECTION_DLOPEN_MODE"
 /// Enable tracing of functions that have been injected..
 #define INJECTION_TRACE "INJECTION_TRACE"
 /// Enable tracing of all functions in an app.
@@ -64,14 +68,14 @@
 /// If global traces are crashing, add this value to your scheme until lt works.
 #define INJECTION_TRACE_REPAIR "INJECTION_TRACE_REPAIR"
 
-/// Path to bazelisk or bazel.
-#define INJECTION_BAZEL_PATH "INJECTION_BAZEL_PATH"
 /// Path to xcrun.
 #define INJECTION_XCRUN_PATH "INJECTION_XCRUN_PATH"
+/// Path to bazelisk or bazel.
+#define INJECTION_BAZEL_PATH "INJECTION_BAZEL_PATH"
+/// Set bazel target to optimize source to bazel target matching
+#define INJECTION_BAZEL_TARGET "INJECTION_BAZEL_TARGET"
 /// Supress initial app popup.
 #define INJECTION_HIDE_XCODE_ALERT "INJECTION_HIDE_XCODE_ALERT"
-/// Notification on injection.
-#define INJECTION_BUNDLE_NOTIFICATION "INJECTION_BUNDLE_NOTIFICATION"
 /// Notification posted with injection timing metrics.
 #define INJECTION_METRICS_NOTIFICATION "INJECTION_METRICS_NOTIFICATION"
 

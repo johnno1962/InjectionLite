@@ -34,6 +34,23 @@ extern const void *DLKit_appImagesContain(const char *symbol);
 
 /// This will be called as soon as the package is loaded into memory.
 + (void)load {
+    // Receive options via Xcode/Swift package.
+    #ifdef INJECTION_KEYPATHS_SETTING
+    if (!getenv(INJECTION_KEYPATHS))
+        setenv(INJECTION_KEYPATHS, INJECTION_KEYPATHS_SETTING, 1);
+    #endif
+    #ifdef INJECTION_NOKEYPATHS_SETTING
+    if (!getenv(INJECTION_NOKEYPATHS))
+        setenv(INJECTION_NOKEYPATHS, INJECTION_NOKEYPATHS_SETTING, 1);
+    #endif
+    #ifdef INJECTION_NOGENERICS_SETTING
+    if (!getenv(INJECTION_NOGENERICS))
+        setenv(INJECTION_NOGENERICS, INJECTION_NOGENERICS_SETTING, 1);
+    #endif
+    #ifdef INJECTION_OF_GENERICS_SETTING
+    if (!getenv(INJECTION_OF_GENERICS))
+        setenv(INJECTION_OF_GENERICS, INJECTION_OF_GENERICS_SETTING, 1);
+    #endif
     if ([self InjectionBoot_inPreview])
         return;
     // Hook Swift runtime's swift_getKeyPath to support pointfree.co's TCA

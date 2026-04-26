@@ -17,8 +17,9 @@ import Foundation
 
 public class FileWatcher: NSObject {
     public typealias InjectionCallback = (_ filesChanged: [String]) -> Void
-    static var INJECTABLE_PATTERN = try! NSRegularExpression(
+    public static var INJECTABLE_PATTERN = try! NSRegularExpression(
         pattern: "[^~]\\.(mm?|cpp|swift|storyboard|xib|o)$")
+    public static var latency = 0.1
 
     static let logsPref = "HotReloadingBuildLogsDir", basePref = "appObjectBase"
     static let defaultLog = UserDefaults.standard.string(forKey: logsPref)
@@ -32,10 +33,6 @@ public class FileWatcher: NSObject {
         didSet {
             UserDefaults.standard.set(objectsBase, forKey: basePref)
             print(APP_PREFIX+" Received objectsBase: "+objectsBase!)
-            if let objectsBase = objectsBase,
-               !objectBases.contains(objectsBase) {
-                objectBases.insert(objectsBase)
-            }
         }
     }
     static var objectBases = Set<String>([defaultBase ?? "nil"])
@@ -94,7 +91,7 @@ public class FileWatcher: NSObject {
                      }
                  }
              },
-             &self.context, roots as CFArray, since, 0.1,
+             &self.context, roots as CFArray, since, Self.latency,
              FSEventStreamCreateFlags(kFSEventStreamCreateFlagUseCFTypes |
                 kFSEventStreamCreateFlagFileEvents))!
         #if !os(macOS)
@@ -133,9 +130,13 @@ public class FileWatcher: NSObject {
                 let base = URL(fileURLWithPath: path)
                     .deletingLastPathComponent()
                 if base.lastPathComponent == Reloader.arch,
-                   strstr(path, APP_NAME) == nil,
-                   Self.objectsBase != base.path {
-                    Self.objectsBase = base.path
+                   strstr(path, APP_NAME) == nil {
+                    if Self.objectsBase != base.path {
+                        Self.objectsBase = base.path
+                    }
+                    if !Self.objectBases.contains(base.path) {
+                        Self.objectBases.insert(base.path)
+                    }
                 }
                 continue
             }
