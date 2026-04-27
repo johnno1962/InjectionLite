@@ -20,6 +20,17 @@ extern void injection_hookGenerics(void *original, void *replacement);
 extern Class swift_allocateGenericClassMetadata(void *, void *, void *);
 extern Class injection_allocateGenericClassMetadata(void *, void *, void *);
 extern const void *DLKit_appImagesContain(const char *symbol);
+const char *_insetting(NSString *name);
+}
+
+@interface _INBoot: NSObject @end
+@implementation _INBoot @end
+
+const char *_insetting(NSString *name) {
+    static NSDictionary *plist;
+    if (!plist)
+        plist = [NSBundle bundleForClass:[_INBoot self]].infoDictionary;
+    return [plist[name] UTF8String] ?: getenv(name.UTF8String);
 }
 
 @implementation NSObject(InjectionBoot)
@@ -54,11 +65,11 @@ extern const void *DLKit_appImagesContain(const char *symbol);
     if ([self InjectionBoot_inPreview])
         return;
     // Hook Swift runtime's swift_getKeyPath to support pointfree.co's TCA
-    if (!getenv(INJECTION_NOKEYPATHS) &&
-        (getenv(INJECTION_KEYPATHS) || DLKit_appImagesContain(TCA_SYMBOL)))
+    if (!_insetting(@INJECTION_NOKEYPATHS) &&
+        (_insetting(@INJECTION_KEYPATHS) || DLKit_appImagesContain(TCA_SYMBOL)))
         hookKeyPaths((void *)swift_getKeyPath,
                      (void *)injection_getKeyPath);
-    if (!getenv(INJECTION_NOGENERICS) && !getenv(INJECTION_OF_GENERICS))
+    if (!_insetting(@INJECTION_NOGENERICS) && !_insetting(@INJECTION_OF_GENERICS))
         injection_hookGenerics((void *)swift_allocateGenericClassMetadata,
                                (void *)injection_allocateGenericClassMetadata);
     // If InjectionLite class present, start it up.
