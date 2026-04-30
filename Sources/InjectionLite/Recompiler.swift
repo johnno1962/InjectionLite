@@ -137,12 +137,13 @@ public struct Recompiler {
 
         // Time the compilation step
         let compilationStartTime = Date.timeIntervalSinceReferenceDate
-        while let errors = Popen.system(finalCommand, errors: nil) {
-            for slow: String in errors[Reloader.typeCheckRegex] {
+        var compile = Popen(cmd: finalCommand+" 2>&1"), errors = ""
+        while let line = compile?.readLine() {
+            for slow: String in line[Reloader.typeCheckRegex] {
                 log(slow)
             }
 
-            if let (path, before, after): (String, String, String) = errors[
+            if let (path, before, after): (String, String, String) = line[
                 #"PCH file '(([^']+?-Bridging-Header-swift_)\w+(-clang_\w+.pch))' not found:"#],
                let mostRecent = Popen(
                 cmd: "/bin/ls -rt \(before)*\(after)")?.readLine() {
@@ -154,8 +155,10 @@ public struct Recompiler {
                     String(cString: strerror(errno)))
             }
 
-//            if !errors.contains(" error: ") { break }
-            if !errors.contains("error: ") { break }
+            errors += line
+        }
+        
+        if compile?.terminatedOK() != true || errors.contains("error: ") {
             writeToCache(removing: cacheKey)
             if cachedCommand != nil { // retry once
                 return recompile(source: source, platformFilter:

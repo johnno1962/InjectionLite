@@ -53,19 +53,10 @@ open class InjectionBase: NSObject {
     }
 
     func fileWatch(dirs: [String]) {
-        // Load gitignore files for watched directories
-        for dir in dirs {
-            GitIgnoreParser.monitor(directory: dir)
-        }
-
         let isVapor = Reloader.injectionQueue != .main
         watcher = FileWatcher(roots: dirs, callback: { filesChanged in
             for file in filesChanged where !file.hasSuffix(".lock") {
-                if let whyNot = GitIgnoreParser.shouldExclude(file: file) {
-                    log("\(file) excluded as \(whyNot)")
-                } else {
-                    self.inject(source: file)
-                }
+                self.inject(source: file)
             }
         }, runLoop: isVapor ? CFRunLoopGetCurrent() : nil)
         log(APP_NAME+": Watching for source changes under " +
