@@ -254,6 +254,7 @@ class SwiftSweeper {
                 }
             case .tuple, .struct:
                 sweepMembers(value)
+            #if compiler(>=6.2) // Xcode 26+
             case .foreignReference:
                 // C++ SWIFT_SHARED_REFERENCE types: reference semantics but not
                 // Swift/ObjC objects, so we can't treat them as AnyObject.
@@ -262,6 +263,7 @@ class SwiftSweeper {
                     print("Sweeping foreign reference:", _typeName(type(of: value)))
                 }
                 sweepMembers(value)
+            #endif
             @unknown default:
                 break
             }
