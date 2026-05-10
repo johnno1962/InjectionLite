@@ -41,6 +41,7 @@ public func detail(_ str: @autoclosure () -> String) -> Bool {
 }
 
 extension Reloader {
+    nonisolated(unsafe)
     public static var traceHook = { (injected: UnsafeMutableRawPointer,
                                      symname: UnsafePointer<CChar>) in
                                     return injected }
@@ -48,37 +49,53 @@ extension Reloader {
         return unsafeBitCast(traceHook(unsafeBitCast(simp,
                  to: UnsafeMutableRawPointer.self), name), to: T.self)
     }
+    nonisolated(unsafe)
     public static var injectionNumber = 0
     // Injection is relatively thread safe as interposes etc. are atomic but..
     #if os(macOS)
+    nonisolated(unsafe)
     public static var injectionQueue = DispatchQueue(label: "InjectionQueue")
     #else
+    nonisolated(unsafe)
     public static let injectionQueue = DispatchQueue.main
     #endif
     // Determines name of cache .plist file in /tmp
     #if os(macOS) || targetEnvironment(macCatalyst)
+    nonisolated(unsafe)
     static var sdk = "macOS"
     #elseif os(tvOS)
+    nonisolated(unsafe)
     static var sdk = "tvOS"
     #elseif os(visionOS)
+    nonisolated(unsafe)
     static var sdk = "xrOS"
     #elseif targetEnvironment(simulator)
+    nonisolated(unsafe)
     static var sdk = "iOS_Simulator"
     #else
+    nonisolated(unsafe)
     static var sdk = "iOS"
     #endif
     #if arch(arm64)
+    nonisolated(unsafe)
     public static var arch = "arm64"
     #elseif arch(arm)
+    nonisolated(unsafe)
     public static var arch = "armv7"
     #elseif arch(x86_64)
+    nonisolated(unsafe)
     public static var arch = "x86_64"
     #endif
+    nonisolated(unsafe)
     public static var tmpbase = "/tmp/"+APP_NAME
+    nonisolated(unsafe)
     public static var appName = Bundle.main.executableURL?.lastPathComponent ?? "Unknown"
+    nonisolated(unsafe)
     public static var cacheFile: String { tmpbase+"_\(appName)_\(sdk)_builds.plist" }
+    nonisolated(unsafe)
     public static var unhider: (() -> Void)?
 
+    nonisolated(unsafe)
     public static var optionsToRemove = #"(-(pch-output-dir|supplementary-output-file-map|emit-((reference-)?dependencies|const-values)|serialize-diagnostics|index-(store|unit-output))(-path)?|(-validate-clang-modules-once )?-clang-build-session-file|-Xcc -ivfsstatcache -Xcc)"#,
         typeCheckLimit = "-warn-long-expression-type-checking=150",
         typeCheckRegex = #"(?<=/)\w+\.swift:\d+:\d+: warning: expression took \d+ms to type-check.*"#
@@ -98,10 +115,14 @@ extension Reloader {
         #"-(?:isysroot|sdk)(?: |"\n")((\#(fileNameRegex)/Contents/Developer)/Platforms/(\w+)\.platform\#(fileNameRegex)\#\.sdk)"#)
 
     // Defaults for Xcode location and platform for linking
+    nonisolated(unsafe)
     public static var xcodeDev = "/Applications/Xcode.app/Contents/Developer"
+    nonisolated(unsafe)
     public static var platform = "iPhoneSimulator"
+    nonisolated(unsafe)
     public static var sysroot =
         "\(xcodeDev)/Platforms/\(platform).platform/Developer/SDKs/\(platform).sdk"
+    nonisolated(unsafe)
     public static var linkCommand = ""
 
     public static func extractLinkCommand(from compileCommand: String) {

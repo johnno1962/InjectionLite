@@ -58,5 +58,7 @@ let package = Package(
             name: "InjectionLiteTests",
             dependencies: ["InjectionLite"],
             linkerSettings: [.unsafeFlags([
-                "-Xlinker", "-interposable"])])]
+                "-Xlinker", "-interposable"])])
+    ],
+    swiftLanguageVersions: [.v5]
 )

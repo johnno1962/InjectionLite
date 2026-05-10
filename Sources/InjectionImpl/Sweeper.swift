@@ -20,7 +20,8 @@ import DLKitD
     @objc optional func injected()
 }
 
-public struct Sweeper {
+public struct Sweeper: Sendable {
+    nonisolated(unsafe)
     static var sweepWarned = false
     static let injectedSEL = #selector(SwiftInjected.injected)
     let notification = Notification.Name(INJECTION_BUNDLE_NOTIFICATION)
@@ -36,7 +37,7 @@ public struct Sweeper {
             NotificationCenter.default.post(name: self.notification, object: classes.new)
 
             if let XCTestCase = objc_getClass("XCTestCase") as? AnyClass {
-                let testClasses = classes.new.filter { self.isSubclass($0, of: XCTestCase) }
+                let testClasses = classes.new.filter { Self.isSubclass($0, of: XCTestCase) }
 
                 // Thanks https://github.com/johnno1962/injectionforxcode/pull/234
                 if !testClasses.isEmpty {
@@ -50,7 +51,7 @@ public struct Sweeper {
                             }
                             self.testQueue.resume()
                         })
-                        RunLoop.main.add(timer, forMode: RunLoop.Mode.common)
+                        RunLoop.main.add(timer, forMode: .common)
                     }
                 }
             }
@@ -58,7 +59,7 @@ public struct Sweeper {
     }
 
     /// Implement our own as runtime function crashes for generaics.
-    func isSubclass(_ subClass: AnyClass, of aClass: AnyClass) -> Bool {
+    static func isSubclass(_ subClass: AnyClass, of aClass: AnyClass) -> Bool {
         var subClass: AnyClass? = subClass
         repeat {
             if subClass == aClass {
@@ -188,11 +189,15 @@ class SwiftSweeper {
 
     /// Seeds for the start of the "sweep" to implement instance level injected() method.
     #if !os(watchOS)
+    nonisolated(unsafe)
     static let app = OSApplication.shared
+    nonisolated(unsafe)
     static var seeds: [Any] = [app.delegate as Any] + app.windows
     #else
+    nonisolated(unsafe)
     static var seeds = [Any]()
     #endif
+    nonisolated(unsafe)
     static var current: SwiftSweeper?
 
     let instanceTask: (AnyObject) -> Void

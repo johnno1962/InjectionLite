@@ -27,23 +27,32 @@ private struct ViewBodyKeyPaths {
                                             UnsafeRawPointer) -> UnsafeRawPointer
 
     static let keyPathFuncName = "swift_getKeyPath"
+    nonisolated(unsafe)
     static var save_getKeyPath: KeyPathFunc!
 
+    nonisolated(unsafe)
     static var cache = [String: ViewBodyKeyPaths]()
     #if canImport(Nimble) || SWIFT_PACKAGE // InjectionNext
+    nonisolated(unsafe)
     static var injectionNumber: Int { Reloader.injectionNumber }
+    nonisolated(unsafe)
     static var lastInjectionNumber = injectionNumber
     #if canImport(DLKitD)
     static func log(_ what: Any...) { InjectionImpl.log(what) }
+    nonisolated(unsafe)
     static var detail = InjectionImpl.detail
     #else
     static func log(_ what: Any...) { InjectionBundle.log(what) }
+    nonisolated(unsafe)
     static var detail = InjectionBundle.detail
     #endif
     #else
+    nonisolated(unsafe)
     static var injectionNumber: Int { SwiftEval.instance.injectionNumber }
+    nonisolated(unsafe)
     static var lastInjectionNumber = SwiftEval().injectionNumber
     #endif
+    nonisolated(unsafe)
     static var hasInjected = false
 
     var lastOffset = 0

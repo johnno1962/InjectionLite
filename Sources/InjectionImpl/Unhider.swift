@@ -25,12 +25,15 @@ import Popen
 open class Unhider {
 
     /// Record of previously unhidden symbols by project and platform and their files
+    nonisolated(unsafe)
     static var unhiddens = [String: [String: [String: String]]]()
     /// One unhide at a time please
     static let unhideQueue = DispatchQueue(label: "Unhider")
     /// Last time specific object file was patched (no longrer used)
+    nonisolated(unsafe)
     static var lastUnhidden = [String: Date]()
     /// Used to determine the path to the project's DerivedData
+    nonisolated(unsafe)
     public static var packageFrameworks: String?
 
     /// Entry point for user initiated or perhaps one day automatic unhiding.

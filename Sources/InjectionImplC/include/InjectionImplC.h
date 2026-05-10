@@ -5,7 +5,9 @@
 //
 #if DEBUG || !SWIFT_PACKAGE
 #import <Foundation/Foundation.h>
+#ifndef APP_NAME
 #define APP_NAME "InjectionLite"
+#endif
 #define APP_PREFIX "🔥 "
 #define VAPOR_SYMBOL "$s10RoutingKit10ParametersVN"
 #define TCA_SYMBOL "_$s22ComposableArchitecture6LoggerCN"

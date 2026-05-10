@@ -22,9 +22,12 @@ private struct TrackingGenerics {
                         UnsafeRawPointer, UnsafeRawPointer) -> ClassMetaData
 
     static let allocFuncName = "swift_allocateGenericClassMetadata"
+    nonisolated(unsafe)
     static var save_allocateGeneric: GenericAllocFunc!
 
+    nonisolated(unsafe)
     private static var registryLock = os_unfair_lock()
+    nonisolated(unsafe)
     private static var _registry = [String: [ClassMetaData]]()
 
     static func addToRegistry(baseName: String, newClass: ClassMetaData) {
