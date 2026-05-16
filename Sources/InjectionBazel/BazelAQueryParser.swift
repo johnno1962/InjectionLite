@@ -330,7 +330,7 @@ public class BazelAQueryParser: LiteParser {
         resolveConfig: (_ aqueryConfig: String, _ pathTail: String) -> String?
     ) -> String {
         var result = command
-        let pattern = #"((?:/[^\s'"]*/execroot/_main/)?)bazel-out/([^/]+)/([^\s'"]+)"#
+        let pattern = #"((?:/[^\s'"]*/execroot/[^/\s'"]+/)?)bazel-out/([^/]+)/([^\s'"]+)"#
         guard let regex = try? NSRegularExpression(pattern: pattern) else { return command }
 
         let matches = regex.matches(

@@ -81,5 +81,23 @@ final class BazelAQueryParserTests: XCTestCase {
             "-I \(rxpExecRoot)/bazel-out/ios_sim_arm64-dbg-ios-sim_arm64-min16.0-ST-module-b/\(moduleBTail)"))
         XCTAssertFalse(rewritten.contains("bazel-out/\(aqueryConfig)"))
     }
+
+    func testRewriteRulesXcodeprojPathsConsumesNonMainAbsoluteExecrootPrefix() {
+        let aqueryConfig = "ios_sim_arm64-dbg-ST-aquery"
+        let rxpConfig = "ios_sim_arm64-dbg-ST-rxp"
+        let pathTail = "bin/app/Foo.swiftmodule"
+        let rxpExecRoot = "/rxp/execroot/_main"
+        let command = "-I/Users/me/out/execroot/my_workspace/bazel-out/\(aqueryConfig)/\(pathTail)"
+
+        let rewritten = BazelAQueryParser.rewriteBazelOutPathsForRulesXcodeproj(
+            command,
+            rxpExecRoot: rxpExecRoot,
+            resolveConfig: { _, _ in rxpConfig })
+
+        XCTAssertEqual(
+            rewritten,
+            "-I\(rxpExecRoot)/bazel-out/\(rxpConfig)/\(pathTail)")
+        XCTAssertFalse(rewritten.contains("execroot/my_workspace/\(rxpExecRoot)"))
+    }
 }
 #endif
