@@ -161,6 +161,95 @@ public class BazelAQueryParser: LiteParser {
     /// Cache of aquery config → rules_xcodeproj config directory mappings.
     /// e.g. "ios_sim_arm64-fastbuild-ST-abc123" → "ios_sim_arm64-dbg-ios-sim_arm64-min17.0-ST-xyz789"
     private var configMappingCache = [String: String]()
+    private var configPathMappingCache = [String: String]()
+
+    struct RxpConfigCandidate: Equatable {
+        let config: String
+        let reason: String
+    }
+
+    static func rxpConfigCandidates(for aqueryConfig: String, entries: [String]) -> [RxpConfigCandidate] {
+        let (archPrefix, modeQualifier) = extractArchAndMode(from: aqueryConfig)
+        var seen = Set<String>()
+        var candidates = [RxpConfigCandidate]()
+
+        func append(_ config: String, reason: String) {
+            guard seen.insert(config).inserted else { return }
+            candidates.append(RxpConfigCandidate(config: config, reason: reason))
+        }
+
+        // 1) Exact match (exec configs often share the same hash)
+        if entries.contains(aqueryConfig) {
+            append(aqueryConfig, reason: "exact")
+        }
+
+        // 2) Match by arch + mode qualifier (e.g. darwin_arm64 + opt-exec)
+        entries
+            .filter {
+                let (entryArch, entryMode) = extractArchAndMode(from: $0)
+                return entryArch == archPrefix && entryMode == modeQualifier
+            }
+            .sorted { $0 > $1 }
+            .forEach { append($0, reason: "mode: \(modeQualifier)") }
+
+        // 3) For target configs (fastbuild), fall back to dbg with same arch
+        if modeQualifier == "fastbuild" {
+            entries
+                .filter {
+                    let (entryArch, entryMode) = extractArchAndMode(from: $0)
+                    return entryArch == archPrefix && entryMode == "dbg"
+                }
+                .sorted { $0 > $1 }
+                .forEach { append($0, reason: "fastbuild→dbg") }
+        }
+
+        // 4) Last resort: any config with the same arch prefix
+        entries
+            .filter { extractArchAndMode(from: $0).arch == archPrefix }
+            .sorted { $0 > $1 }
+            .forEach { append($0, reason: "loose") }
+
+        return candidates
+    }
+
+    static func rxpConfigCandidate(
+        for aqueryConfig: String,
+        pathTail: String,
+        entries: [String],
+        rxpBazelOut: String,
+        fileExists: (String) -> Bool
+    ) -> RxpConfigCandidate? {
+        let filesystemPathTail = pathTail.components(separatedBy: "#").first ?? pathTail
+
+        for candidate in rxpConfigCandidates(for: aqueryConfig, entries: entries) {
+            let candidatePath = "\(rxpBazelOut)/\(candidate.config)/\(filesystemPathTail)"
+            if fileExists(candidatePath) {
+                return candidate
+            }
+        }
+
+        return nil
+    }
+
+    private func logRxpConfigMapping(
+        aqueryConfig: String,
+        candidate: RxpConfigCandidate,
+        pathTail: String? = nil
+    ) {
+        if candidate.reason == "exact" && pathTail == nil {
+            log("🔗 Exact match for aquery config '\(aqueryConfig)' in rxp")
+            return
+        }
+
+        let pathDescription = pathTail
+            .map { " for \(URL(fileURLWithPath: $0).lastPathComponent)" } ?? ""
+
+        if candidate.reason == "loose" {
+            log("⚠️ Loose match for '\(aqueryConfig)' → rxp config '\(candidate.config)'\(pathDescription)")
+        } else {
+            log("🔗 Mapped aquery config '\(aqueryConfig)' → rxp config '\(candidate.config)'\(pathDescription) (\(candidate.reason))")
+        }
+    }
 
     /// Maps an aquery configuration directory name to the corresponding
     /// directory in the rules_xcodeproj output base.
@@ -180,66 +269,50 @@ public class BazelAQueryParser: LiteParser {
         guard let entries = try? FileManager.default
                 .contentsOfDirectory(atPath: rxpBazelOut) else { return nil }
 
-        // 1) Exact match (exec configs often share the same hash)
-        if entries.contains(aqueryConfig) {
-            log("🔗 Exact match for aquery config '\(aqueryConfig)' in rxp")
-            configMappingCache[aqueryConfig] = aqueryConfig
-            return aqueryConfig
-        }
-
-        let (archPrefix, modeQualifier) = extractArchAndMode(from: aqueryConfig)
-
-        // 2) Match by arch + mode qualifier (e.g. darwin_arm64 + opt-exec)
-        let candidates = entries
-            .filter {
-                let (entryArch, entryMode) = extractArchAndMode(from: $0)
-                return entryArch == archPrefix && entryMode == modeQualifier
-            }
-            .sorted { $0 > $1 }
-
-        if let match = candidates.first {
-            log("🔗 Mapped aquery config '\(aqueryConfig)' → rxp config '\(match)' (mode: \(modeQualifier))")
-            configMappingCache[aqueryConfig] = match
-            return match
-        }
-
-        // 3) For target configs (fastbuild), fall back to dbg with same arch
-        if modeQualifier == "fastbuild" {
-            let dbgCandidates = entries
-                .filter {
-                    let (entryArch, entryMode) = extractArchAndMode(from: $0)
-                    return entryArch == archPrefix && entryMode == "dbg"
-                }
-                .sorted { $0 > $1 }
-
-            if let match = dbgCandidates.first {
-                log("🔗 Mapped aquery config '\(aqueryConfig)' → rxp config '\(match)' (fastbuild→dbg)")
-                configMappingCache[aqueryConfig] = match
-                return match
-            }
-        }
-
-        // 4) Last resort: any config with the same arch prefix
-        let anyMatch = entries
-            .filter { extractArchAndMode(from: $0).arch == archPrefix }
-            .sorted { $0 > $1 }
-            .first
-
-        if let match = anyMatch {
-            log("⚠️ Loose match for '\(aqueryConfig)' → rxp config '\(match)'")
-            configMappingCache[aqueryConfig] = match
-            return match
+        if let candidate = Self.rxpConfigCandidates(for: aqueryConfig, entries: entries).first {
+            logRxpConfigMapping(aqueryConfig: aqueryConfig, candidate: candidate)
+            configMappingCache[aqueryConfig] = candidate.config
+            return candidate.config
         }
 
         log("⚠️ No rules_xcodeproj config matching '\(aqueryConfig)' in \(rxpBazelOut)")
         return nil
     }
 
+    private func resolveRxpConfig(for aqueryConfig: String, pathTail: String) -> String? {
+        let cacheKey = "\(aqueryConfig)\u{0}\(pathTail)"
+        if let cached = configPathMappingCache[cacheKey] {
+            return cached
+        }
+
+        guard let rxpExecRoot = rulesXcodeprojExecRoot else { return nil }
+        let rxpBazelOut = rxpExecRoot + "/bazel-out"
+
+        guard let entries = try? FileManager.default
+                .contentsOfDirectory(atPath: rxpBazelOut) else { return nil }
+
+        if let candidate = Self.rxpConfigCandidate(
+            for: aqueryConfig,
+            pathTail: pathTail,
+            entries: entries,
+            rxpBazelOut: rxpBazelOut,
+            fileExists: { FileManager.default.fileExists(atPath: $0) }) {
+            logRxpConfigMapping(
+                aqueryConfig: aqueryConfig,
+                candidate: candidate,
+                pathTail: pathTail)
+            configPathMappingCache[cacheKey] = candidate.config
+            return candidate.config
+        }
+
+        return resolveRxpConfig(for: aqueryConfig)
+    }
+
     /// Extracts the architecture prefix and mode qualifier from a Bazel config.
     /// e.g. `ios_sim_arm64-fastbuild-...` → (`ios_sim_arm64`, `fastbuild`)
     ///      `darwin_arm64-opt-exec-ST-...` → (`darwin_arm64`, `opt-exec`)
     ///      `darwin_arm64-dbg-ST-...` → (`darwin_arm64`, `dbg`)
-    private func extractArchAndMode(from config: String) -> (arch: String, mode: String) {
+    static func extractArchAndMode(from config: String) -> (arch: String, mode: String) {
         // Order matters: check compound modes first
         let modeTokens = ["-fastbuild-", "-opt-exec-", "-dbg-", "-opt-"]
         let modeNames  = ["fastbuild",   "opt-exec",   "dbg",   "opt"]
@@ -251,61 +324,49 @@ public class BazelAQueryParser: LiteParser {
         return (config.components(separatedBy: "-").first ?? config, "unknown")
     }
 
-    /// Distinct filesystem spellings of the main workspace execroot (`…/execroot/_main`),
-    /// so absolute paths in aquery output match even with symlink / normalization drift.
-    private func mainExecRootPathVariants() -> [String] {
-        let outputBaseExec = bazelOutputBase + "/execroot/_main"
-        var roots = Set<String>()
-        roots.insert(execRoot)
-        roots.insert(outputBaseExec)
-        roots.insert((execRoot as NSString).standardizingPath)
-        roots.insert((outputBaseExec as NSString).standardizingPath)
-        roots.insert(URL(fileURLWithPath: execRoot).resolvingSymlinksInPath().path)
-        roots.insert(URL(fileURLWithPath: outputBaseExec).resolvingSymlinksInPath().path)
-        return roots.filter { !$0.isEmpty }
-    }
-
-    /// Rewrites all `bazel-out/<config>/` path segments in a command so they
-    /// point to the rules_xcodeproj output base with the correct config hash.
-    ///
-    /// aquery lines use the default output base (`fastbuild`, etc.). Xcode-driven
-    /// rules_xcodeproj builds use `…/rules_xcodeproj.noindex/build_output_base/`.
-    /// When paths are **absolute** (`…/execroot/_main/bazel-out/<cfg>/…`), replacing
-    /// only the `bazel-out/<cfg>/` fragment would splice the rxp execroot onto the
-    /// main execroot and break module map resolution — so longer absolute prefixes
-    /// are rewritten first, then relative `bazel-out/` segments.
-    private func rewritePathsForRulesXcodeproj(_ command: String) -> String {
-        guard let rxpExecRoot = rulesXcodeprojExecRoot else { return command }
-
+    static func rewriteBazelOutPathsForRulesXcodeproj(
+        _ command: String,
+        rxpExecRoot: String,
+        resolveConfig: (_ aqueryConfig: String, _ pathTail: String) -> String?
+    ) -> String {
         var result = command
-        let pattern = #"bazel-out/([^/]+)/"#
+        let pattern = #"((?:/[^\s'"]*/execroot/[^/\s'"]+/)?)bazel-out/([^/]+)/([^\s'"]+)"#
         guard let regex = try? NSRegularExpression(pattern: pattern) else { return command }
 
-        let nsRange = NSRange(result.startIndex..., in: result)
-        var configsSeen = Set<String>()
-        for match in regex.matches(in: result, range: nsRange) {
-            if let range = Range(match.range(at: 1), in: result) {
-                configsSeen.insert(String(result[range]))
-            }
-        }
+        let matches = regex.matches(
+            in: command,
+            range: NSRange(command.startIndex..., in: command))
+        for match in matches.reversed() {
+            guard
+                let fullRange = Range(match.range(at: 0), in: result),
+                let configRange = Range(match.range(at: 2), in: command),
+                let tailRange = Range(match.range(at: 3), in: command)
+            else { continue }
 
-        for aqueryConfig in configsSeen {
-            guard let rxpConfig = resolveRxpConfig(for: aqueryConfig) else { continue }
-            let destination = "\(rxpExecRoot)/bazel-out/\(rxpConfig)/"
+            let aqueryConfig = String(command[configRange])
+            let pathTail = String(command[tailRange])
+            guard let rxpConfig = resolveConfig(aqueryConfig, pathTail) else { continue }
 
-            // 1) Absolute: …/execroot/_main/bazel-out/<aquery>/  (several spellings)
-            for execVariant in mainExecRootPathVariants() {
-                let oldAbs = "\(execVariant)/bazel-out/\(aqueryConfig)/"
-                result = result.replacingOccurrences(of: oldAbs, with: destination)
-            }
-
-            // 2) Relative to exec root (no directory prefix before bazel-out/)
-            result = result.replacingOccurrences(
-                of: "bazel-out/\(aqueryConfig)/",
-                with: destination)
+            result.replaceSubrange(
+                fullRange,
+                with: "\(rxpExecRoot)/bazel-out/\(rxpConfig)/\(pathTail)")
         }
 
         return result
+    }
+
+    /// Rewrites all `bazel-out/<config>/...` path segments in a command so they
+    /// point to the rules_xcodeproj output base with a config hash that actually
+    /// contains the requested artifact path.
+    private func rewritePathsForRulesXcodeproj(_ command: String) -> String {
+        guard let rxpExecRoot = rulesXcodeprojExecRoot else { return command }
+
+        return Self.rewriteBazelOutPathsForRulesXcodeproj(
+            command,
+            rxpExecRoot: rxpExecRoot,
+            resolveConfig: { aqueryConfig, pathTail in
+                self.resolveRxpConfig(for: aqueryConfig, pathTail: pathTail)
+            })
     }
 
     public func prepareFinalCommand(command: String, source: String, objectFile: String, tmpdir: String, injectionNumber: Int) -> String {
