@@ -155,7 +155,7 @@ public struct Recompiler {
                     String(cString: strerror(errno)))
             }
 
-            errors += line
+            errors += line+"\n"
         }
         
         if compile?.terminatedOK() != true || errors.contains("error: ") {
