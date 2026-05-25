@@ -10,6 +10,8 @@
 //  This code exports these symbols in all object files in the derived data
 //  of a project so code which uses a default argument is able to inject.
 //
+
+#if DEBUG || !SWIFT_PACKAGE
 import Foundation
 #if SWIFT_PACKAGE
 import DLKitD
@@ -141,3 +143,4 @@ open class Unhider {
         return patched
     }
 }
+#endif

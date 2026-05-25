@@ -44,6 +44,7 @@ let package = Package(
         .target(
             name: "InjectionImpl",
             dependencies: ["InjectionImplC",
+                .product(name: "PopenD", package: "Popen"),
                 .product(name: "DLKitD", package: "DLKit"), // DEBUG_ONLY versions
                 .product(name: "SwiftRegexD", package: "SwiftRegex")]),
         // Boots up standalone injection on load for InjectionLite product
