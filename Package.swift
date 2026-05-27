@@ -18,6 +18,13 @@ let package = Package(
         .library(
             name: "InjectionImpl",
             targets: ["InjectionImpl"]),
+        // Expose InjectionBazel so embedders can flip `BazelInterface.isDisabled`
+        // at startup to skip the Bazel workspace probe when they're not
+        // using Bazel — avoids the spurious "Failed to create BazelAQueryParser"
+        // log line on every save.
+        .library(
+            name: "InjectionBazel",
+            targets: ["InjectionBazel"]),
     ],
     dependencies: [
         // Dependencies declare other packages that this package depends on.
