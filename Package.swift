@@ -52,6 +52,12 @@ let package = Package(
             name: "InjectionImpl",
             dependencies: ["InjectionImplC",
                 .product(name: "PopenD", package: "Popen"),
+                // Also declare the non-debug Popen — Xcode 26's dep
+                // scanner reads ALL #if branches in source files; some
+                // branches `import Popen` (without D), and without this
+                // dep declared the scanner emits a (mislabeled?) warning
+                // about a missing PopenD dependency.
+                .product(name: "Popen", package: "Popen"),
                 .product(name: "DLKitD", package: "DLKit"), // DEBUG_ONLY versions
                 .product(name: "SwiftRegexD", package: "SwiftRegex")]),
         // Boots up standalone injection on load for InjectionLite product
