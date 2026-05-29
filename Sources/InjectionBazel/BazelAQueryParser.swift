@@ -107,8 +107,9 @@ public class BazelAQueryParser: LiteParser {
         }
         
         // Apply frontend optimizations early (cacheable transformations)
-        let optimizedCommand = applyFrontendOptimizations(to: rawCommand, primaryFile: source)
-        
+        var optimizedCommand = applyFrontendOptimizations(to: rawCommand, primaryFile: source)
+        optimizedCommand[#" -vfsoverlay "#+Reloader.argumentRegex] = ""
+
         // Cache the optimized result
         setCachedCommand(optimizedCommand, for: cacheKey)
         
