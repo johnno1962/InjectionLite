@@ -137,7 +137,9 @@ public struct Recompiler {
 
         // Time the compilation step
         let compilationStartTime = Date.timeIntervalSinceReferenceDate
-        var compile = Popen(cmd: finalCommand+" 2>&1"), errors = ""
+        var compile: Popen?, errors = ""
+        RETRY: while true {
+        compile = Popen(cmd: finalCommand+" 2>&1")
         while let line = compile?.readLine() {
             for slow: String in line[Reloader.typeCheckRegex] {
                 log(slow)
@@ -149,15 +151,15 @@ public struct Recompiler {
                 cmd: "/bin/ls -rt \(before)*\(after)")?.readLine() {
                 log("ℹ️ Linking \(path) to \(mostRecent)")
                 if symlink(mostRecent, path) == EXIT_SUCCESS {
-                    continue
+                    continue RETRY
                 }
-                log("⚠️ Linking PCH failed " +
-                    String(cString: strerror(errno)))
+                log("⚠️ Linking PCH failed", String(cString: strerror(errno)))
             }
 
             errors += line+"\n"
         }
-        
+        break }
+
         if compile?.terminatedOK() != true || errors.contains("error: ") {
             writeToCache(removing: cacheKey)
             if cachedCommand != nil { // retry once
