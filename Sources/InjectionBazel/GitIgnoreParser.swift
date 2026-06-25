@@ -6,6 +6,13 @@
 //
 
 import Foundation
+#if os(macOS)
+#if canImport(PopenD)
+import PopenD
+#else
+import Popen
+#endif
+#endif
 
 /// Wrapper class for FilenameMatcher to use with NSCache
 private final class MatcherWrapper {
@@ -20,7 +27,8 @@ private final class MatcherWrapper {
 public final class GitIgnoreParser {
     private static let matcherCache = NSCache<NSString, MatcherWrapper>()
     private static let ignoreCache = NSCache<NSString, NSNumber>()
-    private static var gitIgnoreParsers: [GitIgnoreParser] = []
+    private static let monitoredDirectoriesLock = NSLock()
+    private static var monitoredDirectories: [String] = []
     private var patterns: [GitIgnorePattern] = []
     
     struct GitIgnorePattern {
@@ -118,9 +126,9 @@ public final class GitIgnoreParser {
         
         for pattern in patterns {
             guard let matcher = pattern.matcher else { continue }
-            
+
             var matches = false
-            
+
             if pattern.isDirectory {
                 // For directory patterns like "build/", match:
                 // - The directory itself: "build" or "build/"
@@ -166,37 +174,64 @@ public final class GitIgnoreParser {
     }
 
     public static func monitor(directory: String) {
-        let parsers = GitIgnoreParser.findGitIgnoreFiles(startingFrom: directory)
-        Self.gitIgnoreParsers.append(contentsOf: parsers)
+        let monitoredDirectory = URL(fileURLWithPath: directory)
+            .standardizedFileURL.path
+
+        monitoredDirectoriesLock.lock()
+        defer { monitoredDirectoriesLock.unlock() }
+
+        guard !monitoredDirectories.contains(monitoredDirectory) else { return }
+        monitoredDirectories.append(monitoredDirectory)
+        monitoredDirectories.sort { $0.count > $1.count }
     }
 
     static public func shouldExclude(file filePath: String) -> String? {
-        // Early exit: Only process relevant source files
-        guard isValidSourceFile(filePath) else {
-            return "not a valid source file"
+        return shouldExclude(files: [filePath])[filePath]
+    }
+
+    static public func shouldExclude(files filePaths: [String]) -> [String: String] {
+        var exclusions: [String: String] = [:]
+        var filesToCheck: [String] = []
+
+        for filePath in filePaths {
+            // Early exit: Only process relevant source files
+            guard isValidSourceFile(filePath) else {
+                exclusions[filePath] = "not a valid source file"
+                continue
+            }
+
+            // Use cached result if available
+            if let cachedResult = ignoreCache.object(forKey: filePath as NSString) {
+                if cachedResult.boolValue {
+                    exclusions[filePath] = "gitignore rule"
+                }
+                continue
+            }
+
+            filesToCheck.append(filePath)
         }
-        
-        // Use cached result if available
-        if let cachedResult = ignoreCache.object(forKey: filePath as NSString) {
-            return cachedResult.boolValue ? "gitignore rule" : nil
-        }
-        
-        // Check if file should be ignored according to gitignore rules
-        var isDirectory: ObjCBool = false
-        FileManager.default.fileExists(atPath: filePath, isDirectory: &isDirectory)
-        var shouldIgnore = false
-        
-        for parser in gitIgnoreParsers {
-            if parser.shouldIgnore(path: filePath, isDirectory: isDirectory.boolValue) {
-                shouldIgnore = true
-                break
+
+        let filesByDirectory = Dictionary(grouping: filesToCheck,
+                                          by: gitCheckDirectory(for:))
+        for (directory, files) in filesByDirectory {
+            guard let ignoredFiles = gitCheckIgnore(filePaths: files, in: directory) else {
+                for file in files {
+                    ignoreCache.setObject(NSNumber(value: false),
+                                          forKey: file as NSString)
+                }
+                continue
+            }
+            for file in files {
+                let shouldIgnore = ignoredFiles.contains(file)
+                ignoreCache.setObject(NSNumber(value: shouldIgnore),
+                                      forKey: file as NSString)
+                if shouldIgnore {
+                    exclusions[file] = "gitignore rule"
+                }
             }
         }
-        
-        // Cache the result - NSCache handles memory management automatically
-        ignoreCache.setObject(NSNumber(value: shouldIgnore), forKey: filePath as NSString)
-        
-        return shouldIgnore ? "gitignore rule" : nil
+
+        return exclusions
     }
 
     public static var  validExtensions = Set([
@@ -209,5 +244,58 @@ public final class GitIgnoreParser {
         }
         let fileExtension = "." + pathExtension
         return validExtensions.contains(fileExtension)
+    }
+
+#if os(macOS)
+    private static func gitCheckIgnore(filePaths: [String], in directory: String) -> Set<String>? {
+        guard !filePaths.isEmpty else { return [] }
+
+        let inputURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("InjectionLiteCheckIgnore-\(UUID().uuidString)")
+        let input = filePaths.joined(separator: "\n") + "\n"
+        do {
+            try input.write(to: inputURL, atomically: true, encoding: .utf8)
+        } catch {
+            return nil
+        }
+        defer { try? FileManager.default.removeItem(at: inputURL) }
+
+        let gitProcess = Topen(exec: "/bin/bash",
+                               arguments: [
+                                   "-c",
+                                   #"exec /usr/bin/git -C "$1" check-ignore --stdin < "$2""#,
+                                   "git-check-ignore",
+                                   directory,
+                                   inputURL.path
+                               ],
+                               cd: directory)
+        let output = Set(gitProcess)
+        _ = gitProcess.terminatedOK()
+        guard gitProcess.exitStatus == EXIT_SUCCESS || gitProcess.exitStatus == 1 else {
+            return nil
+        }
+
+        return output
+    }
+#else
+    private static func gitCheckIgnore(filePaths: [String], in directory: String) -> Set<String>? {
+        return nil
+    }
+#endif
+
+    private static func gitCheckDirectory(for filePath: String) -> String {
+        let standardizedPath = URL(fileURLWithPath: filePath).standardizedFileURL.path
+
+        monitoredDirectoriesLock.lock()
+        let directories = monitoredDirectories
+        monitoredDirectoriesLock.unlock()
+
+        if let monitoredDirectory = directories.first(where: {
+            standardizedPath == $0 || standardizedPath.hasPrefix($0 + "/")
+        }) {
+            return monitoredDirectory
+        }
+
+        return (filePath as NSString).deletingLastPathComponent
     }
 }
