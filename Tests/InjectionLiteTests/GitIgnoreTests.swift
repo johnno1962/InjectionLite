@@ -138,5 +138,140 @@ final class GitIgnoreTests: XCTestCase {
         XCTAssertFalse(parser.shouldIgnore(path: "main.swift"))
         XCTAssertFalse(parser.shouldIgnore(path: ".bazel-other-file.swift")) // Edge case: .bazel- prefix but not matching pattern
     }
+
+    func testShouldExcludeUsesGitCheckIgnore() throws {
+        try XCTSkipUnless(FileManager.default.isExecutableFile(atPath: "/usr/bin/git"))
+
+        let repo = FileManager.default.temporaryDirectory
+            .appendingPathComponent("InjectionLiteGitIgnoreTests-\(UUID().uuidString)")
+        defer { try? FileManager.default.removeItem(at: repo) }
+
+        try withIsolatedGitEnvironment(at: repo) {
+            try FileManager.default.createDirectory(at: repo, withIntermediateDirectories: true)
+            try runGit(["init"], in: repo)
+            try "/.tmp\n".write(to: repo.appendingPathComponent(".gitignore"),
+                                atomically: true,
+                                encoding: .utf8)
+
+            let ignoredSource = repo
+                .appendingPathComponent(".tmp/bazel_output_base/external/foo.cpp")
+            try FileManager.default.createDirectory(at: ignoredSource.deletingLastPathComponent(),
+                                                    withIntermediateDirectories: true)
+            try "int main() { return 0; }\n".write(to: ignoredSource,
+                                                   atomically: true,
+                                                   encoding: .utf8)
+
+            let trackedSource = repo
+                .appendingPathComponent("Sources/App/ViewController.swift")
+            try FileManager.default.createDirectory(at: trackedSource.deletingLastPathComponent(),
+                                                    withIntermediateDirectories: true)
+            try "struct ViewController {}\n".write(to: trackedSource,
+                                                   atomically: true,
+                                                   encoding: .utf8)
+
+            XCTAssertEqual(GitIgnoreParser.shouldExclude(file: ignoredSource.path), "gitignore rule")
+            XCTAssertNil(GitIgnoreParser.shouldExclude(file: trackedSource.path))
+        }
+    }
+
+    func testShouldExcludeFilesBatchesGitCheckIgnore() throws {
+        try XCTSkipUnless(FileManager.default.isExecutableFile(atPath: "/usr/bin/git"))
+
+        let repo = FileManager.default.temporaryDirectory
+            .appendingPathComponent("InjectionLiteGitIgnoreBatchTests-\(UUID().uuidString)")
+        defer { try? FileManager.default.removeItem(at: repo) }
+
+        try withIsolatedGitEnvironment(at: repo) {
+            try FileManager.default.createDirectory(at: repo, withIntermediateDirectories: true)
+            try runGit(["init"], in: repo)
+            try "/.tmp\n*.generated.swift\n".write(to: repo.appendingPathComponent(".gitignore"),
+                                                   atomically: true,
+                                                   encoding: .utf8)
+            GitIgnoreParser.monitor(directory: repo.path)
+
+            let ignoredCpp = repo
+                .appendingPathComponent(".tmp/bazel_output_base/external/foo.cpp")
+            let ignoredSwift = repo
+                .appendingPathComponent("Sources/App/View.generated.swift")
+            let trackedSwift = repo
+                .appendingPathComponent("Sources/App/View.swift")
+            for source in [ignoredCpp, ignoredSwift, trackedSwift] {
+                try FileManager.default.createDirectory(at: source.deletingLastPathComponent(),
+                                                        withIntermediateDirectories: true)
+                try "source\n".write(to: source, atomically: true, encoding: .utf8)
+            }
+
+            let exclusions = GitIgnoreParser.shouldExclude(files: [
+                ignoredCpp.path,
+                ignoredSwift.path,
+                trackedSwift.path
+            ])
+
+            XCTAssertEqual(exclusions[ignoredCpp.path], "gitignore rule")
+            XCTAssertEqual(exclusions[ignoredSwift.path], "gitignore rule")
+            XCTAssertNil(exclusions[trackedSwift.path])
+        }
+    }
+
+    private func withIsolatedGitEnvironment(at repo: URL, _ body: () throws -> Void) throws {
+        let environment = ProcessInfo.processInfo.environment
+        let keys = ["HOME", "XDG_CONFIG_HOME", "GIT_CONFIG_NOSYSTEM"]
+        let previousValues = keys.reduce(into: [String: String]()) { values, key in
+            values[key] = environment[key]
+        }
+        defer {
+            for key in keys {
+                if let previousValue = previousValues[key] {
+                    setenv(key, previousValue, 1)
+                } else {
+                    unsetenv(key)
+                }
+            }
+        }
+
+        setenv("HOME", repo.path, 1)
+        setenv("XDG_CONFIG_HOME", repo.appendingPathComponent(".config").path, 1)
+        setenv("GIT_CONFIG_NOSYSTEM", "1", 1)
+        try body()
+    }
+
+    private func runGit(_ arguments: [String], in directory: URL) throws {
+        let process = Process()
+        let outputPipe = Pipe()
+        process.executableURL = URL(fileURLWithPath: "/usr/bin/git")
+        process.arguments = arguments
+        process.currentDirectoryURL = directory
+        process.standardOutput = outputPipe
+        process.standardError = outputPipe
+        let readOutput = readPipeInBackground(outputPipe)
+        try process.run()
+        process.waitUntilExit()
+        XCTAssertEqual(process.terminationStatus, 0,
+                       "git \(arguments.joined(separator: " ")) failed:\n\(readOutput())")
+    }
+
+    private func readPipeInBackground(_ pipe: Pipe) -> () -> String {
+        final class OutputBox {
+            var data = Data()
+        }
+
+        let box = OutputBox()
+        let group = DispatchGroup()
+        group.enter()
+        pipe.fileHandleForReading.readabilityHandler = { handle in
+            let data = handle.availableData
+            if data.isEmpty {
+                handle.readabilityHandler = nil
+                group.leave()
+            } else {
+                box.data.append(data)
+            }
+        }
+
+        return {
+            group.wait()
+            return String(data: box.data, encoding: .utf8) ?? ""
+        }
+    }
     
 }
