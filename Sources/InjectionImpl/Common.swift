@@ -166,9 +166,11 @@ extension Reloader {
         case "AppleTVOS":
             osSpecific = "-mtvos-version-min=9.0"
         case "MacOSX":
-            let target = compileCommand
-                .replacingOccurrences(of: #"^.*( -target \S+).*$"#,
-                                      with: "$1", options: .regularExpression)
+            // First match only: an anchored replace returns the entire
+            // compile command when it fails to match (".", used to reach
+            // the anchors, does not match the newlines some commands contain).
+            let target = compileCommand.range(of: #" -target +\S+"#,
+                options: .regularExpression).map { String(compileCommand[$0]) } ?? ""
             osSpecific = "-mmacosx-version-min=10.11"+target
         case "XRSimulator": fallthrough case "XROS": fallthrough
         default:
