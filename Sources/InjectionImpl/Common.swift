@@ -155,25 +155,54 @@ extension Reloader {
             sysroot = "\(xcodeDev)/Platforms/\(platform).platform/Developer/SDKs/\(platform).sdk"
         }
 
+        /// The `-target` triple from the compile command, e.g.
+        /// `" -target arm64-apple-ios18.0"`, or `""` when there isn't one.
+        ///
+        /// `replacingOccurrences` returns the subject unchanged when the pattern
+        /// doesn't match, so comparing against it is how we tell "no target"
+        /// from "the whole command".
+        let targetFlag: String = {
+            let extracted = compileCommand
+                .replacingOccurrences(of: #"^.*( -target \S+).*$"#,
+                                      with: "$1", options: .regularExpression)
+            return extracted == compileCommand ? "" : extracted
+        }()
+
+        // Prefer the deployment target the app was actually compiled with.
+        //
+        // A hardcoded ancient minimum makes clang emit the pre-2017
+        // `LC_VERSION_MIN_*` load command instead of `LC_BUILD_VERSION`. Recent
+        // dyld refuses to map such an image, and reports the refusal as
+        // `code signature invalid … (errno=1)` — which sends people checking
+        // certificates, where there is nothing to find. The dylib's signature is
+        // valid; it is the platform record that is wrong.
+        //
+        // `-target` fully specifies platform and minimum version, so where the
+        // compile command has one it is both more correct and simpler than any
+        // constant we could pick. The hardcoded values remain as a fallback for
+        // commands that don't carry a target.
         let osSpecific: String
         switch platform {
         case "iPhoneSimulator":
-            osSpecific = "-mios-simulator-version-min=9.0"
+            osSpecific = targetFlag.isEmpty ?
+                "-mios-simulator-version-min=9.0" : targetFlag
         case "iPhoneOS":
-            osSpecific = "-miphoneos-version-min=9.0"
+            osSpecific = targetFlag.isEmpty ?
+                "-miphoneos-version-min=9.0" : targetFlag
         case "AppleTVSimulator":
-            osSpecific = "-mtvos-simulator-version-min=9.0"
+            osSpecific = targetFlag.isEmpty ?
+                "-mtvos-simulator-version-min=9.0" : targetFlag
         case "AppleTVOS":
-            osSpecific = "-mtvos-version-min=9.0"
+            osSpecific = targetFlag.isEmpty ?
+                "-mtvos-version-min=9.0" : targetFlag
         case "MacOSX":
-            let target = compileCommand
-                .replacingOccurrences(of: #"^.*( -target \S+).*$"#,
-                                      with: "$1", options: .regularExpression)
-            osSpecific = "-mmacosx-version-min=10.11"+target
+            osSpecific = "-mmacosx-version-min=10.11"+targetFlag
         case "XRSimulator": fallthrough case "XROS": fallthrough
         default:
-            osSpecific = ""
-            log("⚠️ Invalid platform \(platform)")
+            osSpecific = targetFlag
+            if targetFlag.isEmpty {
+                log("⚠️ Invalid platform \(platform)")
+            }
             // -Xlinker -bundle_loader -Xlinker \"\(Bundle.main.executablePath!)\""
         }
 
