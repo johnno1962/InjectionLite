@@ -225,10 +225,35 @@ public struct Reloader {
             }
         }
 
+        // Resilient Swift subclasses export Objective-C class stubs (CMs),
+        // not metadata. Ask their non-generic accessor for complete metadata
+        // before calling Swift/Objective-C reflection or patching the vtable.
+        var realizedStubs = [UnsafeMutableRawPointer: UnsafeMutableRawPointer]()
+        var unresolvedStubs = Set<UnsafeMutableRawPointer>()
+        for entry in image.swiftSymbols(withSuffixes: ["CMs"]) {
+            guard let stub = entry.value else { continue }
+            let accessorName = String(entry.symbol.dropLast()) + "a"
+            guard let address = image[accessorName] else {
+                unresolvedStubs.insert(stub)
+                log("⚠️ Missing metadata accessor for", entry.symbol)
+                continue
+            }
+            typealias Accessor = @convention(thin) (UInt) -> (UnsafeMutableRawPointer, UInt)
+            let accessor = unsafeBitCast(address, to: Accessor.self)
+            let (metadata, state) = accessor(0) // Blocking request: Complete.
+            guard state == 0 else {
+                unresolvedStubs.insert(stub)
+                log("⚠️ Incomplete class metadata for", entry.symbol)
+                continue
+            }
+            realizedStubs[stub] = metadata
+        }
         var newClasses = [AnyClass]()
-        for aClass in Set((image.swiftSymbols(withSuffixes: ["CN"]) +
+        for rawClass in Set((image.swiftSymbols(withSuffixes: ["CN"]) +
                            image.entries(withPrefix: "OBJC_CLASS_$_"))
                     .compactMap(\.value)) {
+            guard !unresolvedStubs.contains(rawClass) else { continue }
+            let aClass = realizedStubs[rawClass] ?? rawClass
             let newClass: AnyClass = autoBitCast(aClass)
             injectedGenerics.remove(_typeName(newClass))
             newClasses.append(newClass)
