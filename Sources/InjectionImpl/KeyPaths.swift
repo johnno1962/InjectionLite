@@ -32,7 +32,7 @@ private struct ViewBodyKeyPaths {
 
     nonisolated(unsafe)
     static var cache = [String: ViewBodyKeyPaths]()
-    #if canImport(Quick) || SWIFT_PACKAGE // InjectionNext
+    #if canImport(Nimble) || SWIFT_PACKAGE // InjectionNext
     nonisolated(unsafe)
     static var injectionNumber: Int { Reloader.injectionNumber }
     nonisolated(unsafe)
@@ -61,7 +61,7 @@ private struct ViewBodyKeyPaths {
     var keyPaths = [UnsafeRawPointer]()
 }
 
-#if canImport(Quick) || SWIFT_PACKAGE // InjectionNext
+#if canImport(Nimble) || SWIFT_PACKAGE // InjectionNext
 private typealias SwiftInjection = ViewBodyKeyPaths
 #endif
 
@@ -84,7 +84,7 @@ public func hookKeyPaths(original: UnsafeMutableRawPointer,
     ViewBodyKeyPaths.save_getKeyPath = autoBitCast(original)
     var keyPathRebinding = [rebinding(name: strdup(ViewBodyKeyPaths.keyPathFuncName),
                                       replacement: replacer, replaced: nil)]
-    #if canImport(Quick) || SWIFT_PACKAGE // InjectionNext
+    #if canImport(Nimble) || SWIFT_PACKAGE // InjectionNext
     Reloader.interposed[ViewBodyKeyPaths.keyPathFuncName] = replacer
     _ = DLKit.appImages.rebind(rebindings: &keyPathRebinding)
     #else
@@ -105,7 +105,7 @@ public func injection_getKeyPath(pattern: UnsafeMutableRawPointer,
         ViewBodyKeyPaths.hasInjected = true
     }
     for caller in Thread.callStackReturnAddresses.dropFirst() {
-        #if canImport(Quick) || SWIFT_PACKAGE // InjectionNext
+        #if canImport(Nimble) || SWIFT_PACKAGE // InjectionNext
         guard let caller = caller.pointerValue, let dlinfo =
                 Reloader.cachedGetInfo(image: DLKit.allImages, impl: caller),
               let callerDecl = dlinfo.name.demangled else {

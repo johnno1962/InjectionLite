@@ -27,7 +27,7 @@ public class InjectionClient: NSObject {
     }
 }
 
-#if !canImport(Quick) && !canImport(InjectionNextC)
+#if !canImport(Nimble) && !canImport(InjectionNextC)
 public func autoBitCast<IN,OUT>(_ x: IN) -> OUT {
     return unsafeBitCast(x, to: OUT.self)
 }

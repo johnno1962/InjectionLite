@@ -6,6 +6,13 @@
 //
 
 import Foundation
+#if os(macOS)
+#if canImport(PopenD)
+import PopenD
+#else
+import Popen
+#endif
+#endif
 
 /// Wrapper class for FilenameMatcher to use with NSCache
 private final class MatcherWrapper {

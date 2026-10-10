@@ -7,18 +7,10 @@
 
 #if DEBUG || !SWIFT_PACKAGE
 import Foundation
-#if os(macOS)
 #if canImport(PopenD)
 @_exported import PopenD
 #else
 @_exported import Popen
-#endif
-#else
-#if canImport(PopenD)
-@_exported import PopenD
-#else
-@_exported import Popen
-#endif
 #endif
 
 extension String {

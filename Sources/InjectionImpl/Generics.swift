@@ -49,7 +49,7 @@ public func hookGenerics(original: UnsafeMutableRawPointer,
     TrackingGenerics.save_allocateGeneric = autoBitCast(original)
     var genericAllocRebinding = [rebinding(name: strdup(TrackingGenerics.allocFuncName),
                                            replacement: replacer, replaced: nil)]
-    #if canImport(Quick) || SWIFT_PACKAGE
+    #if canImport(Nimble) || SWIFT_PACKAGE
     Reloader.interposed[TrackingGenerics.allocFuncName] = replacer
     _ = DLKit.appImages.rebind(rebindings: &genericAllocRebinding)
     #else
@@ -71,7 +71,7 @@ public func injection_allocateGenericClass(description: UnsafeMutableRawPointer,
     return typeMeta
 }
 
-#if canImport(Quick) || SWIFT_PACKAGE // InjectionNext
+#if canImport(Nimble) || SWIFT_PACKAGE // InjectionNext
 extension Sweeper {
     func hookedPatch(of generics: Set<String>, in image: ImageSymbols) -> [AnyClass] {
         var patched = Set<UnsafeRawPointer>()

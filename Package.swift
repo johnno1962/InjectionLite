@@ -22,8 +22,8 @@ let package = Package(
     dependencies: [
         // Dependencies declare other packages that this package depends on.
         // Abstraction for performing shell command to grep logs and recompile.
-        .package(url: "https://github.com/Concoction/iPopen",
-                 .upToNextMajor(from: "2.2.10")),
+        .package(url: "https://github.com/johnno1962/Popen",
+                 .upToNextMajor(from: "2.2.1")),
         // An interface to in-memory symbol table of loaded images.
         .package(url: "https://github.com/johnno1962/DLKit",
                  .upToNextMajor(from: "3.6.0")),
@@ -39,19 +39,19 @@ let package = Package(
             name: "InjectionLite",
             dependencies: ["InjectionImpl", "InjectionBazel",
                 // DEBUG_ONLY version of abstraction for popen().
-                .product(name: "iPopenD", package: "iPopen")]),
+                .product(name: "PopenD", package: "Popen")]),
         // Implementation of "Swizzling for Swift" using interposing et all.
         .target(
             name: "InjectionImpl",
             dependencies: ["InjectionImplC",
-                .product(name: "iPopenD", package: "iPopen"),
+                .product(name: "PopenD", package: "Popen"),
                 .product(name: "DLKitD", package: "DLKit"), // DEBUG_ONLY versions
                 .product(name: "SwiftRegexD", package: "SwiftRegex")]),
         // Boots up standalone injection on load for InjectionLite product
         .target(
             name: "InjectionBazel", dependencies: ["InjectionImpl",
                 .product(name: "DLKitD", package: "DLKit"),
-                .product(name: "iPopenD", package: "iPopen")]),
+                .product(name: "PopenD", package: "Popen")]),
         .target(
             name: "InjectionImplC"),
         // Yes, there are tests.
