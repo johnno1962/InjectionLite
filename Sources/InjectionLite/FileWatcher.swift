@@ -106,7 +106,7 @@ public class FileWatcher: NSObject {
     }
 
     func restart() {
-        eventsStart = FSEventStreamEventId(kFSEventStreamEventIdSinceNow)
+        //eventsStart = FSEventStreamEventId(kFSEventStreamEventIdSinceNow)
         FSEventStreamStop(fileEvents)
         initStream(eventsStart)
     }
